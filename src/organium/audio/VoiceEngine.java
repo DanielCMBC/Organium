@@ -41,6 +41,7 @@ public final class VoiceEngine {
     private final int[] freeStack;    // indices of FREE voices; allocation is a pop, not a scan
     private int freeCount;
 
+    private volatile float outputGain = 1f;
     private volatile int activeVoices;
     private volatile long droppedNotes;
 
@@ -165,6 +166,19 @@ public final class VoiceEngine {
         return droppedNotes;
     }
 
+    /**
+     * Thread-safe. Master output trim, applied to the finished mix before the audio output clips it
+     * to full scale (Hauptwerk's "Output level adjustment"). 0 dB, the default, leaves the mix
+     * bit-for-bit unchanged.
+     */
+    public void setOutputTrimDecibels(double db) {
+        outputGain = (float) Math.pow(10, db / 20);
+    }
+
+    public double outputTrimDecibels() {
+        return 20 * Math.log10(outputGain);
+    }
+
     /** Audio thread only. Fills {@code out} with {@code frames} interleaved stereo frames. */
     public void render(float[] out, int frames) {
         commands.drain(sink);
@@ -184,6 +198,11 @@ public final class VoiceEngine {
             }
         }
         activeVoices = active;
+
+        float trim = outputGain;
+        for (int i = 0; i < stereoLen; i++) {
+            out[i] *= trim;
+        }
     }
 
     /**

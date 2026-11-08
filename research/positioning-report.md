@@ -87,3 +87,18 @@ of a dB, far below audibility (around 0.5–1 dB).
   applied yet: level is confirmed but outside this stage; voicing and balance remain deferred
   (Advanced Edition).
 - Outside X ±4 m / Y −4…8 m, positions are clamped (error up to 0.41 dB at Y = 16 m).
+
+## Addendum 2026-11-07: master trim
+`VoiceEngine.setOutputTrimDecibels` scales the finished mix before the outputs clip to full scale.
+`App --trim=dB` defaults to −10 dB, Hauptwerk's default output level adjustment (`--trim=0` gives the
+previous level). Engine default 0 dB: all engine regressions remain bit-identical; −10 dB equals the
+output × 0.316228 to 1.7e-8 (`GainCheck`). Render cost unchanged (3.8 ns per voice-frame, 0 bytes).
+
+Absolute level against Hauptwerk with −10 dB trim, single-rank test organs (grid-09, grid-10, x-y3):
+rms 0.027 dB, max 0.051 dB.
+
+Open item (hypothesis, not verified): on the Polyphony Testing Organ, where ten ranks play the same
+sample per note, Organium is 3.2–10.3 dB louder (mean 7.9). Organium starts identical pipes in phase,
+so they add coherently (up to +20 dB for ten); if Hauptwerk decorrelates them (it has random tuning
+parameters), they add by power (+10 dB), giving a difference of at most 10 dB, as observed. Pan
+positions are unaffected (0.011 dB). Little impact on organs whose ranks have their own samples.

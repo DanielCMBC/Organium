@@ -32,24 +32,27 @@ import java.util.List;
 /**
  * Development harness.
  * <pre>
- * App --organ=&lt;file.Organ_Hauptwerk_xml&gt; [--asio[=driver]] [--demo] [--pan=hauptwerk|centred]   play a Hauptwerk organ
+ * App --organ=&lt;file.Organ_Hauptwerk_xml&gt; [--asio[=driver]] [--demo] [--pan=hauptwerk|centred] [--trim=dB]   play a Hauptwerk organ
  * App [--asio[=driver]] [--demo] [sample.wav] [release.wav]          play one sample across the keyboard
  * App --list-asio
  * </pre>
  * Without sample files a test pipe is synthesized; --demo plays a chord instead of listening to MIDI.
  * --pan chooses how mono pipes are placed in stereo: hauptwerk (default; the table measured from
- * Hauptwerk 4.2.1) or centred (every pipe in the middle).
+ * Hauptwerk 4.2.1) or centred (every pipe in the middle). --trim sets the master output level in dB,
+ * applied before the output clips; the default, -10, is Hauptwerk's default output level adjustment.
  */
 public final class App {
     private static final int SAMPLE_RATE = 48000;
     private static final int PERIOD_FRAMES = 256;
     private static final int ROOT_NOTE = 60;
+    private static final double DEFAULT_TRIM_DB = -10;     // Hauptwerk's default output level adjustment
 
     private boolean useAsio;
     private String asioDriver;
     private boolean demo;
     private String organFile;
     private PanLaw panLaw = MeasuredPanTable.hauptwerk();
+    private double trimDb = DEFAULT_TRIM_DB;
     private final List<String> files = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
@@ -67,6 +70,8 @@ public final class App {
                 app.demo = true;
             } else if (arg.equals("--pan=centred")) {
                 app.panLaw = PanLaw.CENTRED;
+            } else if (arg.startsWith("--trim=")) {
+                app.trimDb = Double.parseDouble(arg.substring("--trim=".length()));
             } else if (arg.equals("--pan=hauptwerk")) {
                 app.panLaw = MeasuredPanTable.hauptwerk();
             } else if (arg.startsWith("--organ=")) {
@@ -99,6 +104,7 @@ public final class App {
         samples.warnings().forEach(w -> System.out.println("  warning: " + w));
 
         VoiceEngine engine = new VoiceEngine(4096, organ.pipes().size(), SAMPLE_RATE, 0.05f);
+        engine.setOutputTrimDecibels(trimDb);
         engine.warmUp();
         AudioOutput output = startOutput(engine);
         Console console = new Console(organ, samples.byId(), engine, panLaw);
@@ -201,6 +207,7 @@ public final class App {
         }
 
         VoiceEngine engine = new VoiceEngine(1024, Console.CHANNELS * 128, SAMPLE_RATE, 0.05f);
+        engine.setOutputTrimDecibels(trimDb);
         engine.warmUp();
         AudioOutput output = startOutput(engine);
 

@@ -13,7 +13,14 @@ public final class GainCheck {
     private static final int BLOCK = 256;
 
     private static float[] render(Sample attack, ReleaseSet rel, float gl, float gr) {
+        return render(attack, rel, gl, gr, null);
+    }
+
+    private static float[] render(Sample attack, ReleaseSet rel, float gl, float gr, Double trimDb) {
         VoiceEngine e = new VoiceEngine(16, 16, 48000, 0.05f);
+        if (trimDb != null) {
+            e.setOutputTrimDecibels(trimDb);
+        }
         e.noteOn(0, attack, rel, gl, gr, 1.0731f);
         float[] all = new float[BLOCK * 2 * 400];
         float[] b = new float[BLOCK * 2];
@@ -55,6 +62,21 @@ public final class GainCheck {
                         channels == 1 ? "mono  " : "stereo", g[0], g[1], worst, ok ? "OK" : "FAIL");
             }
         }
+        // master trim: 0 dB leaves the output bit-identical; -10 dB scales it by 10^(-10/20)
+        Sample attack = synth(1, 1, true);
+        ReleaseSet rel = ReleaseSet.of(synth(1, 2, false));
+        float[] plain = render(attack, rel, 0.7f, 1.3f);
+        boolean same = java.util.Arrays.equals(plain, render(attack, rel, 0.7f, 1.3f, 0.0));
+        fails += same ? 0 : 1;
+        System.out.println("trim  0 dB: " + (same ? "bit-identical OK" : "DIFFERS FAIL"));
+        float[] trimmed = render(attack, rel, 0.7f, 1.3f, -10.0);
+        double k = Math.pow(10, -0.5);
+        double worstTrim = 0;
+        for (int i = 0; i < plain.length; i++) {
+            worstTrim = Math.max(worstTrim, Math.abs(trimmed[i] - plain[i] * k));
+        }
+        fails += worstTrim < 1e-6 ? 0 : 1;
+        System.out.printf("trim -10 dB: max deviation from output x %.6f = %.3g  %s%n", k, worstTrim, worstTrim < 1e-6 ? "OK" : "FAIL");
         System.out.println(fails == 0 ? "GAIN CHECK PASSED" : fails + " GAIN CHECK(S) FAILED");
         System.exit(fails == 0 ? 0 : 1);
     }

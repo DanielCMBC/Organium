@@ -38,6 +38,7 @@ public final class HauptwerkComparison {
         Organ organ = OrganParser.parse(def);
         Map<Integer, Sample> samples = OrganParser.loadSamples(organ, OrganParser.sampleSetsRootOf(def)).byId();
         VoiceEngine engine = new VoiceEngine(256, organ.pipes().size(), RATE, 0.05f);
+        engine.setOutputTrimDecibels(-10);   // App default: Hauptwerk's default output level adjustment
         Console console = new Console(organ, samples, engine, MeasuredPanTable.hauptwerk());
 
         Map<Integer, double[]> organium = new HashMap<>();
@@ -91,6 +92,8 @@ public final class HauptwerkComparison {
         int count = 0;
         double sumMin = Double.MAX_VALUE;
         double sumMax = -Double.MAX_VALUE;
+        double levelSq = 0;
+        double levelWorst = 0;
         Map<Integer, Organ.Pipe> pipeOfNote = new HashMap<>();
         for (Organ.Pipe p : organ.pipes()) {
             if (p.rankId() == 2) {
@@ -113,6 +116,9 @@ public final class HauptwerkComparison {
             double el = ol - hl;
             double er = or - hr;
             double oSum = 20 * Math.log10(o[0] + o[1]);
+            double hSum = 20 * Math.log10(h[0] + h[1]);
+            levelSq += (oSum - hSum) * (oSum - hSum);
+            levelWorst = Math.max(levelWorst, Math.abs(oSum - hSum));
             sumMin = Math.min(sumMin, oSum);
             sumMax = Math.max(sumMax, oSum);
             worst = Math.max(worst, Math.max(Math.abs(el), Math.abs(er)));
@@ -124,7 +130,8 @@ public final class HauptwerkComparison {
         }
         Files.write(Path.of(args[2]), rows);
         System.out.printf("%s: %d notes  per-channel gain error vs Hauptwerk: rms %.4f dB, max %.4f dB;  "
-                        + "Organium amplitude sum spread %.4f dB%n",
-                def.getFileName(), count / 2, Math.sqrt(sq / count), worst, sumMax - sumMin);
+                        + "Organium amplitude sum spread %.4f dB; absolute level vs Hauptwerk (trim -10 dB): rms %.4f, max %.4f dB%n",
+                def.getFileName(), count / 2, Math.sqrt(sq / count), worst, sumMax - sumMin,
+                Math.sqrt(levelSq / (count / 2)), levelWorst);
     }
 }
