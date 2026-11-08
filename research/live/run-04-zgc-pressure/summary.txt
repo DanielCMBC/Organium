@@ -1,0 +1,8 @@
+organ: Melcer Chamber Music Hall (3855 samples, 2175 MiB)
+duration: 170 s, 32839 callbacks, buffer 256 frames (period 5.33 ms)
+render time: mean 0.148 ms, worst 1.421 ms (27% of the period); histogram: <=10% 31895  <=20% 940  <=30% 4  <=50% 0  <=75% 0  <=100% 0  >100% 0  
+callback gaps: worst 6.82 ms; gaps over 1.5 periods: 0; renders over one period: 0
+audio-thread allocation after warm-up: 392 bytes
+garbage collection: ZGC Minor Cycles: 0 collections, 0 ms; ZGC Minor Pauses: 0 collections, 0 ms; ZGC Major Cycles: 21 collections, 824 ms; ZGC Major Pauses: 105 collections, 1 ms; 
+heap in use: max 2826 MiB; free RAM: min 400 MiB
+voices: max 458; sounding pipes: max 108; dropped notes: 0; lost events: 0

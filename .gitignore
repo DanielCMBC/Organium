@@ -22,3 +22,6 @@ research/hauptwerk-probe/spatial/*.Organ_Hauptwerk_xml
 research/hauptwerk-probe/OrganiumProbe.CustomOrgan_Hauptwerk_xml
 # Regression baseline rendered from the Polyphony Testing Organ's samples (record locally)
 regression/stage-0/console-stop-changes.f32
+
+# Screenshots of organ consoles show the sample set's licensed artwork
+research/live/**/*.png

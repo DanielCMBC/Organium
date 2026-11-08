@@ -4,6 +4,7 @@ import organium.audio.Sample;
 import organium.audio.Waveform;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -36,7 +37,12 @@ public final class WavReader {
 
     /** Reads audio as 16-bit PCM. Float data in [-1, 1] is scaled to full range; overs are clipped. */
     public static Sample read(Path file) throws IOException {
-        Wav w = parse(file);
+        try (Arena arena = Arena.ofConfined()) {
+            return toPcm16(parse(file, arena));
+        }
+    }
+
+    private static Sample toPcm16(Wav w) throws UnsupportedWavFormatException {
         int count = w.frames() * w.channels();
         short[] pcm = new short[count];
         ByteBuffer buf = w.buf();
@@ -74,7 +80,12 @@ public final class WavReader {
 
     /** Reads any supported encoding as floats: integer PCM is scaled to [-1, 1), float data is exact. */
     public static Waveform readWaveform(Path file) throws IOException {
-        Wav w = parse(file);
+        try (Arena arena = Arena.ofConfined()) {
+            return toFloat(parse(file, arena));
+        }
+    }
+
+    private static Waveform toFloat(Wav w) throws UnsupportedWavFormatException {
         int count = w.frames() * w.channels();
         float[] data = new float[count];
         ByteBuffer buf = w.buf();
@@ -121,12 +132,18 @@ public final class WavReader {
         return new UnsupportedWavFormatException(w.file() + ": " + w.bits() + "-bit " + encoding + " samples not supported");
     }
 
-    private static Wav parse(Path file) throws IOException {
-        // Mapped rather than read: the file's bytes stay in the OS page cache instead of becoming a
-        // file-sized garbage array on the Java heap for every sample loaded.
+    /**
+     * Maps the file into {@code arena} rather than reading it: the bytes stay in the OS page cache
+     * instead of becoming a file-sized garbage array on the Java heap for every sample. The caller
+     * closes the arena right after decoding, which unmaps the file at once instead of whenever the
+     * garbage collector gets to the mapping (with a rarely-collecting collector, thousands of stale
+     * mappings kept gigabytes of sample files in the process's working set).
+     */
+    private static Wav parse(Path file, Arena arena) throws IOException {
         ByteBuffer buf;
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
-            buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size()).order(ByteOrder.LITTLE_ENDIAN);
+            buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size(), arena).asByteBuffer()
+                    .order(ByteOrder.LITTLE_ENDIAN);
         }
         if (buf.remaining() < 12 || buf.getInt(0) != fourCC("RIFF") || buf.getInt(8) != fourCC("WAVE")) {
             throw new IOException(file + " is not a RIFF/WAVE file");

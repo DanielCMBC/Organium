@@ -1,0 +1,10 @@
+﻿Melcer Chamber Music Hall: 3855 samples, 2175 MiB, loaded in 3.0 s
+ASIO: ASIO4ALL v2, 256-frame buffer (5.3 ms), reported output latency 5.3 ms
+organ: Melcer Chamber Music Hall (3855 samples, 2175 MiB)
+duration: 170 s, 32802 callbacks, buffer 256 frames (period 5.33 ms)
+render time: mean 0.148 ms, worst 0.972 ms (18% of the period); histogram: <=10% 31931  <=20% 871  <=30% 0  <=50% 0  <=75% 0  <=100% 0  >100% 0  
+callback gaps: worst 186.16 ms; gaps over 1.5 periods: 1; renders over one period: 0
+audio-thread allocation after warm-up: 392 bytes
+garbage collection: ZGC Minor Cycles: 1 collections, 11 ms; ZGC Minor Pauses: 3 collections, 0 ms; ZGC Major Cycles: 26 collections, 1018 ms; ZGC Major Pauses: 130 collections, 1 ms; 
+heap in use: max 2694 MiB; free RAM: min 639 MiB
+voices: max 473; sounding pipes: max 108; dropped notes: 0; lost events: 0
