@@ -1,0 +1,2 @@
+index,channel,note,onset_s,rms_l,rms_r,peak_l,peak_r,rms_l_db,rms_r_db,peak_l_db,peak_r_db,r_minus_l_db,power_db
+0,3,60,3.677,0.0,0.0,0.0,0.0,-inf,-inf,-inf,-inf,,

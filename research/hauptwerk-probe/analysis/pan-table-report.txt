@@ -1,0 +1,17 @@
+table 25 x 18 (Y x X); 261 held-out points, 227 inside the domain
+  bilinear: per-channel gain error  rms 0.0177 dB   max 0.1218 dB
+      worst (+0.050, +0.000) sym-front-back measured p +0.02881  table +0.04233  err 0.1218 dB
+      worst (+2.275, -1.808) grid-09        measured p -0.27687  table -0.27181  err 0.0606 dB
+      worst (+1.710, -2.182) grid-10        measured p -0.28145  table -0.27662  err 0.0582 dB
+      worst (+0.347, +0.527) grid-09        measured p +0.30388  table +0.29920  err 0.0581 dB
+      worst (+1.161, -1.440) grid-10        measured p -0.26074  table -0.25615  err 0.0537 dB
+      |Y| >= 0.5 m only: rms 0.0162  max 0.0606 dB (214 points)
+  cubic   : per-channel gain error  rms 0.0153 dB   max 0.1932 dB
+      worst (+0.469, +1.082) grid-09        measured p +0.31010  table +0.32527  err 0.1932 dB
+      worst (+0.050, +0.000) sym-front-back measured p +0.02881  table +0.03894  err 0.0911 dB
+      worst (+0.347, +0.527) grid-09        measured p +0.30388  table +0.30764  err 0.0471 dB
+      worst (+0.507, -1.135) grid-09        measured p -0.17446  table -0.17071  err 0.0393 dB
+      worst (+3.409, +3.420) grid-10        measured p +0.35930  table +0.35770  err 0.0216 dB
+      |Y| >= 0.5 m only: rms 0.0145  max 0.1932 dB (214 points)
+centre check: 46 points at X = 0, max |p| 0.00e+00
+antisymmetry check: 52 +-X pairs, max |p(X)+p(-X)| 1.15e-05

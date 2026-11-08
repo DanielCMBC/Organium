@@ -1,0 +1,7 @@
+﻿bench round 0: 150 active voices, 3.85 ns per voice-frame, 147.9 us per 256-frame block, allocated 464 bytes in 3000 blocks
+bench round 1: 150 active voices, 3.81 ns per voice-frame, 146.3 us per 256-frame block, allocated 0 bytes in 3000 blocks
+bench round 2: 150 active voices, 3.83 ns per voice-frame, 147.1 us per 256-frame block, allocated 0 bytes in 3000 blocks
+bench round 3: 150 active voices, 3.80 ns per voice-frame, 146.1 us per 256-frame block, allocated 0 bytes in 3000 blocks
+bench round 4: 150 active voices, 3.79 ns per voice-frame, 145.6 us per 256-frame block, allocated 0 bytes in 3000 blocks
+bench round 5: 150 active voices, 3.80 ns per voice-frame, 146.0 us per 256-frame block, allocated 0 bytes in 3000 blocks
+bench round 6: 150 active voices, 3.80 ns per voice-frame, 146.0 us per 256-frame block, allocated 0 bytes in 3000 blocks

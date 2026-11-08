@@ -1,0 +1,2 @@
+index,note,matched,onset_s,match_error_s,sustain_used_s,rms_l_db,rms_r_db,peak_l_db,peak_r_db,l_minus_r_db,block_l_minus_r_median_db,block_l_minus_r_p10_db,block_l_minus_r_p90_db,power_db,release_delay_s,release_active_s,release_l_minus_r_db,release_rms_db
+0,60,True,1.56,0.0,1.5,-82.903,-77.609,-70.309,-65.204,-5.294,-5.4267,-5.8842,-5.1688,-76.485,-0.007,0.26,-0.016,-63.772

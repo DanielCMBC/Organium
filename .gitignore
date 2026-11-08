@@ -1,0 +1,24 @@
+# Build output
+out/
+out-test/
+__pycache__/
+
+# Local rollback copies (superseded by git history)
+rollback/
+
+# Personal notes
+Instructions.txt
+
+# Hauptwerk / Milan Digital Audio material must not be redistributed (project rule: no copying of
+# their assets). Kept locally only:
+#   snapshots hold copies of installed organ definitions and settings,
+#   recordings are renders of their samples,
+#   compiled/variant/spatial organ definitions derive from their example custom organ.
+research/hauptwerk-probe/snapshots/
+research/hauptwerk-probe/recordings/
+research/hauptwerk-probe/compiled/
+research/hauptwerk-probe/variants/
+research/hauptwerk-probe/spatial/*.Organ_Hauptwerk_xml
+research/hauptwerk-probe/OrganiumProbe.CustomOrgan_Hauptwerk_xml
+# Regression baseline rendered from the Polyphony Testing Organ's samples (record locally)
+regression/stage-0/console-stop-changes.f32
