@@ -1,0 +1,10 @@
+t_ms,uptime_ms,event
+4266.372,4342,console window opening
+5907.316,5969,console window open
+0.005,6138,ASIO start called
+285.726,6424,ASIO start returned
+292.922,6432,round 0 begins
+308.522,6447,screenshot chords-registration begins
+662.145,6801,screenshot chords-registration ends
+662.577,6801,first note on
+13310.493,19449,callback thread priority after boost: 15

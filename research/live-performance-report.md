@@ -94,31 +94,62 @@ which unmaps the file immediately, independent of the collector. Decoded output 
 2.66 GB of heap in use under artificial garbage, too close to the limit; 4 GB cost about 130 MB of
 working set more. The G1 region-size setting is no longer needed (ZGC has no humongous regions).
 
-## Finding 3: one gap at the start of a run (open)
+## Finding 3: one gap at the start of a run (not reproduced; cause not determined)
 
 Three runs (05, 08, 09a) had one gap each at the very start: 186 ms, 45 ms and 45 ms. All three
-fell in the first second, and none happened later in any run. Run 09a logged the harness's
-steps with timestamps:
+fell in the first second, and none happened later in any run. Run 09a logged the harness's steps
+(times since the performance began, which is just after `AsioOutput.start()` returns):
 
     [0.023 s] round 0 begins
     [0.036 s] screenshot chords-registration begins   (Robot screen capture of the console window + PNG)
     [0.105 s] worst gap ends: 45.23 ms; the callback before it rendered for 0.015 ms
     [0.415 s] screenshot ends
 
-So the gap fell inside the harness's first screenshot of the console window, before any note
-sounded. It is not a JVM pause: every safepoint in the first seconds took under 1 ms, and ZGC
-logged no pause over 1 ms. Rendering didn't run late either: the callback before the gap took
-0.015 ms. The later screenshots (at about 92 s and 107 s) caused no gaps. Repeated full-screen
-captures with no console window open (`AsioTimingCheck ... capture`) didn't disturb the driver.
-The likeliest explanation is that the first capture of the newly shown, GPU-drawn Swing window
-holds up ASIO4ALL's thread. That is likely but not proven. The 186 ms case in run 05 happened while
-free RAM was down to 0.37 GB, before the unmap fix.
+The driver's first callback comes about 45 ms after `start()` returns (below), so this gap fell
+within the driver's first few callbacks, while the first screenshot was being taken, before any note.
+It is not a JVM pause (every safepoint in the first seconds took under 1 ms; ZGC logged no pause
+over 1 ms), and rendering did not run late (0.015 ms).
 
-Organium itself never takes screenshots, so this most likely belongs to the harness. To confirm
-it: a run with screenshots turned off, and a cold start of `run.ps1 --asio` while playing in the
-first second. Neither has been done yet: the second set of trials was stopped by the host's
-low-memory guard during loading (the system had about 4.3 GB free at that moment), and it is not
-being restarted automatically.
+### Follow-up trials (run 10-12, `research/live/startup_trial.ps1`)
+
+Each trial is a separate JVM with the stable settings (ZGC, 4 GB), run one at a time in the
+foreground, playing 12-15 s. `LiveStress` now traces the first 8,000 callbacks from the very first
+one (`startup-callbacks.csv`: time and render time of each) and logs what the harness does on the
+same clock, zero being the call to `AsioOutput.start()` (`startup-events.csv`, with JVM uptime so the
+GC log can be placed on it). `startup_gaps.py` lists every interval over 1.5 periods with the events
+around it. Nothing is excluded: every interval from the first callback on is counted.
+
+| Condition | Starts | Intervals over 8 ms | Worst interval in the first second |
+|---|---|---|---|
+| full stack, first screenshot at 0.33 s (as in run 09a) | 7 | 0 | 6.7 ms |
+| full stack, `--no-screenshots` | 6 | 0 | 6.9 ms |
+| full stack with `sample_process.ps1` polling WMI every second (as gc_compare.ps1 did) | 4 | 0 | 6.7 ms |
+| ZGC's post-load proactive collection overlapping the first callbacks (shots-1, noshots-1, noshots-3 of run 12) | 3 | 0 | |
+| driver alone, `AsioTimingCheck` (30 separate JVMs, `driver-starts.txt`) | 30 | 0 | 7.0 ms |
+| `run.ps1 --asio --demo` (App, with the new dropout report) | 1 | 0 | 7.0 ms (whole run) |
+
+The driver's first callback arrives 278-462 ms after `start()` is called (`start()` itself returns
+after about 287 ms). The first two or three callbacks come in a burst (0.3-3.7 ms apart) while
+ASIO4ALL primes its buffers, then the 5.33 ms rhythm settles at once; no start showed a stall.
+
+So in 48 starts since then, none reproduced the gap, and none of the candidates (the screenshot,
+driver initialisation, the WMI sampler, a ZGC cycle at start) produces it on demand. The cause of the
+three original gaps is therefore not determined. What the data do show:
+
+- Every dropout seen with ASIO4ALL, whatever its cause, lasted almost exactly 45 ms: the three
+  start-up gaps (45.0, 45.2 and 45.2 ms, and 186 ms under memory pressure) and the gaps after G1
+  pauses of about 22 ms (45.2, 44.8 ms). A late callback seems to make ASIO4ALL drop and resync a
+  fixed block, so a short stall becomes a 45 ms dropout. That is a property of ASIO4ALL over WDM; a
+  native ASIO driver may behave differently.
+- The remaining explanation is something outside Organium briefly holding up the driver's thread
+  at those moments (other processes, the system's own activity). Run 05's 186 ms gap happened with
+  0.37 GB of free RAM, before the unmap fix.
+
+`App` now reports dropouts itself (`--asio`): a line whenever callbacks fall behind or a render
+overruns, and a summary on exit (callbacks, mean and worst render, worst gap, late callbacks,
+overruns), counted from the first callback with nothing excluded. A real session will show whether
+start-up dropouts happen in normal use. The ZGC configuration is unchanged: no test showed a reason
+to change it.
 
 ## Audio-thread allocation
 
@@ -138,13 +169,12 @@ from the render path); it is not yet identified.
 
 ## Console
 
-The Melcer console renders correctly in Organium's `ConsoleWindow` (stop knobs drawn and lit
-from the sample set's own images; screenshots in the run folders, not committed). Its 1692 x 1200
-design is taller than this screen's 1040-pixel working area, so the bottom row of knobs is cut off.
-Hauptwerk scales the console to fit the window. Scaling is a GUI change and is left for a separate,
-reviewed step, as agreed.
+The Melcer console renders correctly in Organium's `ConsoleWindow`, with stop knobs drawn and lit
+from the sample set's own images (screenshots are not committed). Its 1692 x 1200 design is taller
+than this screen's 1040-pixel working area. The window now scales the console proportionally to
+fit: see `research/console-scaling.md`.
 
 ## Not changed
 
-No streaming, tremulants, swell or other features. The ASIO, MIDI and voice engines are unchanged
-apart from the instrumentation wrapper, which is used only by the test harness.
+No streaming, tremulants, swell or other features. The ASIO, MIDI and voice engines are unchanged.
+`RenderMonitor` wraps the renderer in the test harness and, for the dropout report, in `App`.

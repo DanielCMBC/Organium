@@ -37,6 +37,7 @@ public final class AsioTimingCheck {
         };
 
         AsioOutput asio = new AsioOutput(driver);
+        long startCalled = System.nanoTime();
         asio.start(rate, period, silence);
         System.out.println("driver: " + asio.driverDescription() + ", buffer " + asio.bufferFrames() + " frames");
         int[] captures = {0};
@@ -100,11 +101,22 @@ public final class AsioTimingCheck {
         }
         h.append(" >16:").append(sorted.length - start);
         System.out.println(h);
-        StringBuilder first = new StringBuilder("first 24 intervals ms:");
-        for (int i = 100; i < Math.min(124, gaps.length); i++) {
+        StringBuilder first = new StringBuilder("first 12 intervals ms:");
+        for (int i = 0; i < Math.min(12, gaps.length); i++) {
             first.append(String.format(" %.2f", gaps[i]));
         }
         System.out.println(first);
+        double worstFirstSecond = 0;
+        double worstAfter = 0;
+        for (int i = 0; i < gaps.length; i++) {
+            if (times[i + 1] - times[0] < 1_000_000_000L) {
+                worstFirstSecond = Math.max(worstFirstSecond, gaps[i]);
+            } else {
+                worstAfter = Math.max(worstAfter, gaps[i]);
+            }
+        }
+        System.out.printf("worst interval: first second %.2f ms, afterwards %.2f ms; first callback %.1f ms after start()%n",
+                worstFirstSecond, worstAfter, (times[0] - startCalled) / 1e6);
         System.exit(0); // AWT threads from the capture option would keep the JVM alive
     }
 }

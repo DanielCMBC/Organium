@@ -33,13 +33,25 @@ import java.util.Random;
  * time (as the MIDI thread would) while a monitor thread records, every second, voices, callback
  * render times and gaps, audio-thread allocation, garbage collection, heap and free RAM.
  *
- * Usage: LiveStress <organ.xml> <seconds> <out dir> [garbage MB/s] [asio driver]
+ * Usage: LiveStress <organ.xml> <seconds> <out dir> [garbage MB/s] [asio driver] [options]
  * The optional garbage rate runs a background thread that allocates (and briefly keeps) memory at that
  * rate, to make the collector run often enough to measure its pauses within a short test.
  * Writes <out dir>/timeline.csv, summary.txt and console-*.png.
+ *
+ * Options (for startup diagnosis):
+ *   --no-screenshots   take no screenshots of the console window
+ *   --stop-after=S     end the performance S seconds after it starts, even mid-round
+ * Every run also writes startup-callbacks.csv (the time and render time of the first callbacks,
+ * from the very first one) and startup-events.csv (what the harness did, on the same clock: zero
+ * is the moment AsioOutput.start() was called).
  */
 public final class LiveStress {
     private static final int RATE = 48000;
+    private static final List<String> EVENTS = java.util.Collections.synchronizedList(new ArrayList<>());
+    private static volatile long clock0 = System.nanoTime(); // reset when ASIO is started
+    private static volatile long stopAt = Long.MAX_VALUE;
+    private static boolean screenshots = true;
+    private boolean firstNote = true;
 
     private final Console console;
     private final Organ organ;
@@ -85,6 +97,9 @@ public final class LiveStress {
     // ---- performance primitives (performance thread) ----
 
     private void sleep(double ms) throws InterruptedException {
+        if (System.nanoTime() > stopAt) {
+            throw new InterruptedException("stop-after reached");
+        }
         if (ms > 0) {
             Thread.sleep((long) ms, (int) ((ms % 1) * 1e6));
         }
@@ -105,6 +120,10 @@ public final class LiveStress {
     }
 
     private void down(int ch, int... notes) {
+        if (firstNote) {
+            firstNote = false;
+            mark("first note on");
+        }
         for (int n : notes) {
             console.keyDown(ch, n);
         }
@@ -117,6 +136,9 @@ public final class LiveStress {
     }
 
     private void shot(String name) {
+        if (!screenshots) {
+            return;
+        }
         mark("screenshot " + name + " begins");
         try {
             Rectangle[] r = new Rectangle[1];
@@ -129,9 +151,47 @@ public final class LiveStress {
         mark("screenshot " + name + " ends");
     }
 
-    /** Logs an event with its time since the start of the performance, to line up with the monitor. */
-    private void mark(String what) {
-        System.out.printf(Locale.ROOT, "  [%8.3f s] %s%n", (System.nanoTime() - start) / 1e9, what);
+    /** Logs an event with its time since ASIO was started, to line up with the callback trace. */
+    private static void mark(String what) {
+        double t = (System.nanoTime() - clock0) / 1e6;
+        long uptime = ManagementFactory.getRuntimeMXBean().getUptime(); // the clock of the -Xlog "uptime" decoration
+        EVENTS.add(String.format(Locale.ROOT, "%.3f,%d,%s", t, uptime, what));
+        System.out.printf(Locale.ROOT, "  [%9.3f ms, uptime %6d ms] %s%n", t, uptime, what);
+    }
+
+    /** Records when each of the first callbacks started and how long it rendered. Allocation-free. */
+    private static final class CallbackTrace implements organium.audio.AudioOutput.Renderer {
+        private final organium.audio.AudioOutput.Renderer inner;
+        private final long[] at = new long[8000];
+        private final int[] rendered = new int[at.length];
+        private volatile int count;
+
+        CallbackTrace(organium.audio.AudioOutput.Renderer inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public void render(float[] out, int frames) {
+            long s = System.nanoTime();
+            inner.render(out, frames);
+            int i = count;
+            if (i < at.length) {
+                at[i] = s;
+                rendered[i] = (int) (System.nanoTime() - s);
+                count = i + 1;
+            }
+        }
+
+        void write(Path file) throws java.io.IOException {
+            try (PrintWriter w = new PrintWriter(Files.newBufferedWriter(file))) {
+                w.println("index,t_ms,interval_ms,render_ms");
+                int n = count;
+                for (int i = 0; i < n; i++) {
+                    w.printf(Locale.ROOT, "%d,%.3f,%s,%.3f%n", i, (at[i] - clock0) / 1e6,
+                            i == 0 ? "" : String.format(Locale.ROOT, "%.3f", (at[i] - at[i - 1]) / 1e6), rendered[i] / 1e6);
+                }
+            }
+        }
     }
 
     private static final int[][] PROGRESSION = {
@@ -334,12 +394,26 @@ public final class LiveStress {
         sleep(8000);
     }
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] all) throws Exception {
+        List<String> positional = new ArrayList<>();
+        double stopAfter = -1;
+        for (String a : all) {
+            if (a.equals("--no-screenshots")) {
+                screenshots = false;
+            } else if (a.startsWith("--stop-after=")) {
+                stopAfter = Double.parseDouble(a.substring("--stop-after=".length()));
+            } else if (a.startsWith("--")) {
+                throw new IllegalArgumentException("Unknown option " + a);
+            } else {
+                positional.add(a);
+            }
+        }
+        String[] args = positional.toArray(new String[0]);
         Path def = Path.of(args[0]);
         int seconds = Integer.parseInt(args[1]);
         Path outDir = Path.of(args[2]);
         double garbageMbPerSecond = args.length > 3 ? Double.parseDouble(args[3]) : 0;
-        String driver = args.length > 4 ? args[4] : null;
+        String driver = args.length > 4 && !args[4].equals("-") ? args[4] : null; // "-": first driver
         Files.createDirectories(outDir);
 
         long t0 = System.nanoTime();
@@ -355,10 +429,19 @@ public final class LiveStress {
         engine.setOutputTrimDecibels(-10);
         engine.warmUp();
         Console console = new Console(organ, byId, engine, MeasuredPanTable.hauptwerk());
+        mark("console window opening");
         ConsoleWindow window = ConsoleWindow.open(console, OrganParser.sampleSetsRootOf(def), () -> { });
+        mark("console window open");
         RenderMonitor monitor = new RenderMonitor(engine::render, RATE);
+        CallbackTrace trace = new CallbackTrace(monitor);
         AsioOutput asio = new AsioOutput(driver);
-        asio.start(RATE, 256, monitor);
+        clock0 = System.nanoTime();
+        mark("ASIO start called");
+        asio.start(RATE, 256, trace);
+        mark("ASIO start returned");
+        if (stopAfter >= 0) {
+            stopAt = System.nanoTime() + (long) (stopAfter * 1e9);
+        }
         System.out.printf("ASIO: %s, %d-frame buffer (%.1f ms), reported output latency %.1f ms%n",
                 asio.driverDescription(), asio.bufferFrames(), asio.bufferFrames() * 1000.0 / RATE,
                 asio.outputLatencyFrames() * 1000.0 / RATE);
@@ -441,7 +524,11 @@ public final class LiveStress {
             }
         }
         long allocEnd = threads.getThreadAllocatedBytes(monitor.audioThreadId());
+        mark("callback thread priority after boost: " + asio.callbackThreadPriority());
         asio.stop();
+        trace.write(outDir.resolve("startup-callbacks.csv"));
+        Files.write(outDir.resolve("startup-events.csv"), (Iterable<String>) () -> java.util.stream.Stream.concat(
+                java.util.stream.Stream.of("t_ms,uptime_ms,event"), new ArrayList<>(EVENTS).stream()).iterator());
         SwingUtilities.invokeLater(window::dispose);
 
         long period = monitor.periodNanos();
@@ -460,7 +547,7 @@ public final class LiveStress {
                 organ: %s (%d samples, %d MiB)
                 duration: %.0f s played (%d s asked for; a round always finishes), %d callbacks, buffer %d frames (period %.2f ms)
                 render time: mean %.3f ms, worst %.3f ms (%.0f%% of the period); histogram: %s
-                callback gaps: worst %.2f ms (ended at %.3f s; the callback before it rendered for %.3f ms); gaps over 1.5 periods: %d; renders over one period: %d
+                callback gaps (every callback, from the first after ASIO start): worst %.2f ms (ended %.3f s after ASIO start; the callback before it rendered for %.3f ms); gaps over 1.5 periods: %d; renders over one period: %d
                 audio-thread allocation after warm-up: %d bytes
                 garbage collection: %s
                 heap in use: max %d MiB; free RAM: min %d MiB
@@ -468,7 +555,7 @@ public final class LiveStress {
                 """, organ.name(), byId.size(), sampleBytes >> 20, played, seconds, monitor.calls(), asio.bufferFrames(),
                 period / 1e6, monitor.totalRenderNanos() / 1e6 / Math.max(1, monitor.calls()), monitor.worstRenderNanos() / 1e6,
                 100.0 * monitor.worstRenderNanos() / period, hist, monitor.worstGapNanos() / 1e6,
-                (monitor.worstGapEndNanos() - perf.start) / 1e9, monitor.renderBeforeWorstGapNanos() / 1e6, monitor.gaps(),
+                (monitor.worstGapEndNanos() - clock0) / 1e9, monitor.renderBeforeWorstGapNanos() / 1e6, monitor.gaps(),
                 monitor.overruns(), allocAtWarmup < 0 ? -1 : allocEnd - allocAtWarmup, gcText, maxHeap >> 20, minFree >> 20,
                 maxVoices, maxPipes, engine.droppedNotes(), console.lostEvents());
         Files.writeString(outDir.resolve("summary.txt"), summary);

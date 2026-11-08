@@ -1,0 +1,19 @@
+﻿Melcer Chamber Music Hall: 3855 samples, 2175 MiB, loaded in 4.9 s
+  [ 5265.441 ms] console window opening
+  [ 6767.038 ms] console window open
+  [    0.004 ms] ASIO start called
+  [  281.015 ms] ASIO start returned
+ASIO: ASIO4ALL v2, 256-frame buffer (5.3 ms), reported output latency 5.3 ms
+  [  302.589 ms] round 0 begins
+  [  315.388 ms] screenshot chords-registration begins
+  [  693.734 ms] screenshot chords-registration ends
+  [  694.101 ms] first note on
+  [17323.984 ms] callback thread priority after boost: 15
+organ: Melcer Chamber Music Hall (3855 samples, 2175 MiB)
+duration: 17 s played (1 s asked for; a round always finishes), 3187 callbacks, buffer 256 frames (period 5.33 ms)
+render time: mean 0.032 ms, worst 0.155 ms (3% of the period); histogram: <=10% 3187  <=20% 0  <=30% 0  <=50% 0  <=75% 0  <=100% 0  >100% 0  
+callback gaps (every callback, from the first after ASIO start): worst 6.83 ms (ended 2.178 s after ASIO start; the callback before it rendered for 0.019 ms); gaps over 1.5 periods: 0; renders over one period: 0
+audio-thread allocation after warm-up: 392 bytes
+garbage collection: ZGC Minor Cycles: 0 collections, 0 ms; ZGC Minor Pauses: 0 collections, 0 ms; ZGC Major Cycles: 4 collections, 141 ms; ZGC Major Pauses: 20 collections, 0 ms; 
+heap in use: max 2496 MiB; free RAM: min 1912 MiB
+voices: max 26; sounding pipes: max 14; dropped notes: 0; lost events: 0

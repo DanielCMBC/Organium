@@ -1,0 +1,8 @@
+t_ms,event
+4695.952,console window opening
+6224.029,console window open
+0.005,ASIO start called
+272.110,ASIO start returned
+292.400,round 0 begins
+306.026,first note on
+17317.024,callback thread priority after boost: 15

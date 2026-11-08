@@ -3,6 +3,7 @@ package organium;
 import organium.audio.AudioOutput;
 import organium.audio.JavaSoundOutput;
 import organium.audio.ReleaseSet;
+import organium.audio.RenderMonitor;
 import organium.audio.Sample;
 import organium.audio.VoiceEngine;
 import organium.audio.asio.AsioOutput;
@@ -244,8 +245,11 @@ public final class App {
 
     private AudioOutput startOutput(VoiceEngine engine) throws Exception {
         if (useAsio) {
+            RenderMonitor monitor = new RenderMonitor(engine::render, SAMPLE_RATE);
             AsioOutput asio = new AsioOutput(asioDriver);
-            asio.start(SAMPLE_RATE, PERIOD_FRAMES, engine::render);
+            long started = System.nanoTime();
+            asio.start(SAMPLE_RATE, PERIOD_FRAMES, monitor);
+            watchDropouts(monitor, started);
             System.out.printf("ASIO: %s, %d-frame buffer (%.1f ms), reported output latency %.1f ms%n",
                     asio.driverDescription(), asio.bufferFrames(), asio.bufferFrames() * 1000.0 / SAMPLE_RATE,
                     asio.outputLatencyFrames() * 1000.0 / SAMPLE_RATE);
@@ -254,6 +258,43 @@ public final class App {
         JavaSoundOutput output = new JavaSoundOutput();
         output.start(SAMPLE_RATE, PERIOD_FRAMES, engine::render);
         return output;
+    }
+
+    /**
+     * Reports audio dropouts while playing, from a separate thread (the audio callback only updates
+     * RenderMonitor's counters): a line whenever the driver's callbacks fall behind or a render runs
+     * past its period, and a summary when the program ends. Counting starts at the first callback;
+     * nothing is excluded, including the start-up.
+     */
+    private static void watchDropouts(RenderMonitor monitor, long started) {
+        Thread watch = new Thread(() -> {
+            long gaps = 0;
+            long overruns = 0;
+            while (true) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                long g = monitor.gaps();
+                long o = monitor.overruns();
+                if (g != gaps || o != overruns) {
+                    System.out.printf("Audio dropout at %.1f s: %d late callback(s) so far (worst gap %.1f ms), "
+                                    + "%d render overrun(s)%n", (System.nanoTime() - started) / 1e9, g,
+                            monitor.worstGapNanos() / 1e6, o);
+                    gaps = g;
+                    overruns = o;
+                }
+            }
+        }, "dropout-watch");
+        watch.setDaemon(true);
+        watch.start();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> System.out.printf(
+                "Audio: %d callbacks in %.0f s; render mean %.3f ms, worst %.3f ms (period %.2f ms); "
+                        + "worst gap between callbacks %.1f ms; %d late callback(s), %d render overrun(s)%n",
+                monitor.calls(), (System.nanoTime() - started) / 1e9,
+                monitor.totalRenderNanos() / 1e6 / Math.max(1, monitor.calls()), monitor.worstRenderNanos() / 1e6,
+                monitor.periodNanos() / 1e6, monitor.worstGapNanos() / 1e6, monitor.gaps(), monitor.overruns())));
     }
 
     private static float pitchFor(int note) {

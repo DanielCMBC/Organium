@@ -1,0 +1,31 @@
+[0.016s] Using The Z Garbage Collector
+[0.973s] GC(0) Major Collection (Warmup)
+[0.974s] Safepoint "ZMarkStartYoungAndOld", Time since last: 940953500 ns, Reaching safepoint: 116000 ns, At safepoint: 22700 ns, Leaving safepoint: 6500 ns, Total: 145200 ns, Threads: 4 runnable, 14 total
+[0.982s] Safepoint "ZMarkEndYoung", Time since last: 8444300 ns, Reaching safepoint: 191700 ns, At safepoint: 18100 ns, Leaving safepoint: 6900 ns, Total: 216700 ns, Threads: 4 runnable, 14 total
+[0.983s] Safepoint "ZRelocateStartYoung", Time since last: 729800 ns, Reaching safepoint: 186000 ns, At safepoint: 11200 ns, Leaving safepoint: 7300 ns, Total: 204500 ns, Threads: 4 runnable, 14 total
+[0.989s] Safepoint "ZMarkEndOld", Time since last: 4917100 ns, Reaching safepoint: 410400 ns, At safepoint: 15500 ns, Leaving safepoint: 6800 ns, Total: 432700 ns, Threads: 4 runnable, 14 total
+[0.992s] Safepoint "CleanClassLoaderDataMetaspaces", Time since last: 2687000 ns, Reaching safepoint: 772700 ns, At safepoint: 25200 ns, Leaving safepoint: 7400 ns, Total: 805300 ns, Threads: 4 runnable, 14 total
+[0.992s] Safepoint "ZRelocateStartOld", Time since last: 49200 ns, Reaching safepoint: 127900 ns, At safepoint: 11900 ns, Leaving safepoint: 6500 ns, Total: 146300 ns, Threads: 4 runnable, 14 total
+[0.992s] GC(0) Major Collection (Warmup) 418M(10%)->408M(10%) 0.019s
+[1.559s] GC(1) Major Collection (Warmup)
+[1.560s] Safepoint "ZMarkStartYoungAndOld", Time since last: 566943000 ns, Reaching safepoint: 372900 ns, At safepoint: 15700 ns, Leaving safepoint: 9100 ns, Total: 397700 ns, Threads: 3 runnable, 14 total
+[1.574s] Safepoint "ZMarkEndYoung", Time since last: 14001900 ns, Reaching safepoint: 254400 ns, At safepoint: 17000 ns, Leaving safepoint: 7600 ns, Total: 279000 ns, Threads: 3 runnable, 14 total
+[1.584s] Safepoint "ZRelocateStartYoung", Time since last: 9845600 ns, Reaching safepoint: 39200 ns, At safepoint: 19600 ns, Leaving safepoint: 6500 ns, Total: 65300 ns, Threads: 3 runnable, 14 total
+[1.592s] Safepoint "ZMarkEndOld", Time since last: 8361900 ns, Reaching safepoint: 167100 ns, At safepoint: 16700 ns, Leaving safepoint: 6600 ns, Total: 190400 ns, Threads: 3 runnable, 14 total
+[1.595s] Safepoint "ZRelocateStartOld", Time since last: 2648000 ns, Reaching safepoint: 143500 ns, At safepoint: 16400 ns, Leaving safepoint: 7200 ns, Total: 167100 ns, Threads: 4 runnable, 14 total
+[1.595s] GC(1) Major Collection (Warmup) 830M(20%)->870M(21%) 0.036s
+[1.999s] GC(2) Major Collection (Warmup)
+[1.999s] Safepoint "ZMarkStartYoungAndOld", Time since last: 404016400 ns, Reaching safepoint: 72200 ns, At safepoint: 17400 ns, Leaving safepoint: 6100 ns, Total: 95700 ns, Threads: 4 runnable, 14 total
+[2.005s] Safepoint "ZMarkEndYoung", Time since last: 5633000 ns, Reaching safepoint: 121100 ns, At safepoint: 16200 ns, Leaving safepoint: 7300 ns, Total: 144600 ns, Threads: 4 runnable, 14 total
+[2.012s] Safepoint "ZRelocateStartYoung", Time since last: 6869400 ns, Reaching safepoint: 201700 ns, At safepoint: 15700 ns, Leaving safepoint: 6600 ns, Total: 224000 ns, Threads: 4 runnable, 14 total
+[2.027s] Safepoint "ZMarkEndOld", Time since last: 14563100 ns, Reaching safepoint: 232800 ns, At safepoint: 16200 ns, Leaving safepoint: 6600 ns, Total: 255600 ns, Threads: 4 runnable, 14 total
+[2.031s] Safepoint "ZRelocateStartOld", Time since last: 3455600 ns, Reaching safepoint: 58900 ns, At safepoint: 16500 ns, Leaving safepoint: 5300 ns, Total: 80700 ns, Threads: 4 runnable, 14 total
+[2.041s] GC(2) Major Collection (Warmup) 1238M(30%)->1272M(31%) 0.041s
+[6.298s] GC(3) Major Collection (Proactive)
+[6.298s] Safepoint "ZMarkStartYoungAndOld", Time since last: 4267769500 ns, Reaching safepoint: 17700 ns, At safepoint: 19600 ns, Leaving safepoint: 1000 ns, Total: 38300 ns, Threads: 0 runnable, 19 total
+[6.317s] Safepoint "ZMarkEndYoung", Time since last: 18434600 ns, Reaching safepoint: 3200 ns, At safepoint: 15600 ns, Leaving safepoint: 600 ns, Total: 19400 ns, Threads: 0 runnable, 19 total
+[6.318s] Safepoint "ZRelocateStartYoung", Time since last: 751400 ns, Reaching safepoint: 2200 ns, At safepoint: 10500 ns, Leaving safepoint: 400 ns, Total: 13100 ns, Threads: 0 runnable, 19 total
+[6.349s] Safepoint "ZMarkEndOld", Time since last: 30979100 ns, Reaching safepoint: 2800 ns, At safepoint: 15600 ns, Leaving safepoint: 900 ns, Total: 19300 ns, Threads: 0 runnable, 19 total
+[6.353s] Safepoint "CleanClassLoaderDataMetaspaces", Time since last: 3944500 ns, Reaching safepoint: 4000 ns, At safepoint: 69600 ns, Leaving safepoint: 4600 ns, Total: 78200 ns, Threads: 0 runnable, 19 total
+[6.356s] Safepoint "ZRelocateStartOld", Time since last: 3031200 ns, Reaching safepoint: 5300 ns, At safepoint: 18400 ns, Leaving safepoint: 700 ns, Total: 24400 ns, Threads: 0 runnable, 19 total
+[6.373s] GC(3) Major Collection (Proactive) 2498M(61%)->2386M(58%) 0.075s

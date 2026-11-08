@@ -1,0 +1,90 @@
+start 1
+  first 12 intervals ms: 3.35 5.52 5.45 5.64 5.04 5.13 5.05 5.06 5.54 6.03 5.47 4.26
+  worst interval: first second 6.59 ms, afterwards 6.62 ms; first callback 284.1 ms after start()
+start 2
+  first 12 intervals ms: 3.77 4.99 5.52 5.24 5.12 6.14 4.53 5.98 5.06 5.76 5.14 5.93
+  worst interval: first second 6.65 ms, afterwards 6.64 ms; first callback 286.1 ms after start()
+start 3
+  first 12 intervals ms: 4.62 4.46 5.99 4.53 5.96 5.50 4.49 6.01 5.04 5.53 5.99 4.47
+  worst interval: first second 6.81 ms, afterwards 6.76 ms; first callback 282.8 ms after start()
+start 4
+  first 12 intervals ms: 3.15 6.03 5.52 4.61 6.10 4.69 5.99 4.02 5.97 5.31 5.04 5.04
+  worst interval: first second 6.77 ms, afterwards 6.77 ms; first callback 282.8 ms after start()
+start 5
+  first 12 intervals ms: 3.79 5.47 5.51 4.64 5.07 5.05 5.50 5.57 5.69 4.64 6.04 5.04
+  worst interval: first second 6.64 ms, afterwards 6.79 ms; first callback 284.7 ms after start()
+start 6
+  first 12 intervals ms: 3.26 5.95 5.56 4.48 5.99 5.51 4.53 6.02 5.11 5.14 5.72 5.01
+  worst interval: first second 6.63 ms, afterwards 6.63 ms; first callback 326.7 ms after start()
+start 7
+  first 12 intervals ms: 3.02 5.55 5.65 4.91 5.26 6.06 5.54 4.47 6.06 4.53 5.99 4.70
+  worst interval: first second 6.72 ms, afterwards 6.53 ms; first callback 283.7 ms after start()
+start 8
+  first 12 intervals ms: 4.32 5.49 4.54 5.34 6.07 5.58 4.00 5.77 6.16 5.11 4.50 6.00
+  worst interval: first second 6.62 ms, afterwards 6.67 ms; first callback 281.1 ms after start()
+start 9
+  first 12 intervals ms: 4.58 5.93 4.46 5.09 5.94 4.98 5.51 4.97 5.53 5.06 5.50 5.97
+  worst interval: first second 6.90 ms, afterwards 6.68 ms; first callback 285.1 ms after start()
+start 10
+  first 12 intervals ms: 3.26 5.99 6.03 4.47 6.00 4.50 6.01 4.49 6.01 5.49 4.52 5.99
+  worst interval: first second 6.84 ms, afterwards 6.66 ms; first callback 282.9 ms after start()
+start 11
+  first 12 intervals ms: 4.83 5.49 5.53 4.50 5.47 6.04 4.49 5.53 5.48 4.70 5.33 5.53
+  worst interval: first second 6.94 ms, afterwards 6.64 ms; first callback 280.2 ms after start()
+start 12
+  first 12 intervals ms: 2.48 5.50 5.98 4.50 5.49 6.05 4.47 6.03 4.53 6.01 4.49 5.98
+  worst interval: first second 6.65 ms, afterwards 6.75 ms; first callback 286.7 ms after start()
+start 13
+  first 12 intervals ms: 4.60 6.01 4.52 5.98 4.52 5.99 4.49 5.51 5.99 4.50 5.48 6.04
+  worst interval: first second 6.65 ms, afterwards 6.76 ms; first callback 279.1 ms after start()
+start 14
+  first 12 intervals ms: 5.00 4.48 6.01 5.01 4.50 6.08 5.93 4.49 5.62 5.06 6.00 4.63
+  worst interval: first second 7.00 ms, afterwards 6.69 ms; first callback 281.9 ms after start()
+start 15
+  first 12 intervals ms: 4.47 5.50 5.09 5.61 5.13 5.09 5.56 5.50 5.45 4.63 6.14 4.64
+  worst interval: first second 6.64 ms, afterwards 6.62 ms; first callback 280.4 ms after start()
+start 16
+  first 12 intervals ms: 4.19 5.89 5.57 4.49 5.99 5.03 5.48 5.49 4.49 5.49 6.02 5.50
+  worst interval: first second 6.71 ms, afterwards 6.55 ms; first callback 285.5 ms after start()
+start 17
+  first 12 intervals ms: 3.52 5.98 5.03 5.47 5.52 5.50 4.62 5.26 5.53 5.99 4.50 5.01
+  worst interval: first second 6.83 ms, afterwards 6.63 ms; first callback 281.4 ms after start()
+start 18
+  first 12 intervals ms: 4.19 4.45 6.56 4.50 5.49 5.99 4.52 5.51 5.72 4.69 5.07 6.02
+  worst interval: first second 6.63 ms, afterwards 6.63 ms; first callback 281.6 ms after start()
+start 19
+  first 12 intervals ms: 2.85 5.47 5.50 5.54 4.96 5.53 5.47 5.04 4.99 6.03 5.50 4.46
+  worst interval: first second 6.78 ms, afterwards 6.52 ms; first callback 310.1 ms after start()
+start 20
+  first 12 intervals ms: 4.55 5.45 5.08 4.49 5.99 5.51 5.49 4.50 5.50 5.63 5.58 5.26
+  worst interval: first second 6.64 ms, afterwards 6.64 ms; first callback 278.9 ms after start()
+start 21
+  first 12 intervals ms: 5.25 3.91 6.56 4.49 6.01 4.49 5.99 4.64 5.29 5.07 5.50 6.50
+  worst interval: first second 6.75 ms, afterwards 6.62 ms; first callback 283.3 ms after start()
+start 22
+  first 12 intervals ms: 4.07 5.43 5.70 5.25 5.59 4.43 6.00 5.13 4.78 6.62 4.52 5.49
+  worst interval: first second 6.62 ms, afterwards 6.61 ms; first callback 283.6 ms after start()
+start 23
+  first 12 intervals ms: 3.62 5.48 6.03 4.52 5.92 5.07 4.49 5.51 5.26 6.12 5.02 5.49
+  worst interval: first second 6.64 ms, afterwards 6.63 ms; first callback 279.3 ms after start()
+start 24
+  first 12 intervals ms: 2.68 5.49 6.01 5.52 4.48 5.51 5.51 6.00 4.20 6.18 5.53 5.49
+  worst interval: first second 6.63 ms, afterwards 6.60 ms; first callback 284.6 ms after start()
+start 25
+  first 12 intervals ms: 4.43 4.99 5.06 6.19 5.08 4.99 5.65 5.50 4.49 6.00 5.53 5.47
+  worst interval: first second 6.65 ms, afterwards 6.74 ms; first callback 283.7 ms after start()
+start 26
+  first 12 intervals ms: 3.75 5.48 6.03 4.48 6.02 5.48 4.49 5.53 5.50 6.00 4.50 6.13
+  worst interval: first second 6.65 ms, afterwards 6.64 ms; first callback 278.3 ms after start()
+start 27
+  first 12 intervals ms: 2.55 5.89 5.99 4.04 5.97 6.00 4.01 5.98 6.00 4.00 6.00 6.00
+  worst interval: first second 6.63 ms, afterwards 6.61 ms; first callback 281.4 ms after start()
+start 28
+  first 12 intervals ms: 3.35 5.98 5.02 5.53 5.10 5.58 5.75 4.97 6.02 4.96 4.52 6.56
+  worst interval: first second 6.56 ms, afterwards 6.62 ms; first callback 283.8 ms after start()
+start 29
+  first 12 intervals ms: 3.02 5.47 6.19 4.66 4.62 5.48 5.51 5.55 5.27 5.06 5.53 5.99
+  worst interval: first second 6.63 ms, afterwards 6.64 ms; first callback 280.5 ms after start()
+start 30
+  first 12 intervals ms: 4.32 5.45 4.53 5.04 5.50 6.01 4.48 5.47 5.68 5.53 5.99 5.11
+  worst interval: first second 6.51 ms, afterwards 6.63 ms; first callback 284.4 ms after start()
