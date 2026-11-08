@@ -6,8 +6,9 @@ import organium.audio.Waveform;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.file.Files;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 /**
  * Reads RIFF/WAVE files: 16/24/32-bit integer PCM and 32/64-bit IEEE float, mono or stereo,
@@ -121,7 +122,12 @@ public final class WavReader {
     }
 
     private static Wav parse(Path file) throws IOException {
-        ByteBuffer buf = ByteBuffer.wrap(Files.readAllBytes(file)).order(ByteOrder.LITTLE_ENDIAN);
+        // Mapped rather than read: the file's bytes stay in the OS page cache instead of becoming a
+        // file-sized garbage array on the Java heap for every sample loaded.
+        ByteBuffer buf;
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ)) {
+            buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size()).order(ByteOrder.LITTLE_ENDIAN);
+        }
         if (buf.remaining() < 12 || buf.getInt(0) != fourCC("RIFF") || buf.getInt(8) != fourCC("WAVE")) {
             throw new IOException(file + " is not a RIFF/WAVE file");
         }

@@ -48,3 +48,35 @@ project rule they need evidence (schema order or a probe) before the parser uses
 - Options: load only ranks that can sound (−0.9 GB until the tremulant exists), run with a larger
   heap (e.g. `-Xmx3500m`) after closing Hauptwerk, and later keep releases or attacks on disk
   (streaming) instead of all in RAM.
+
+## Update 2026-11-07: Melcer loads and plays (measured, Hauptwerk closed)
+Changes: `OrganParser.loadSamples` loads only ranks that some stop plays (the 7 tremmed and 9 noise
+ranks are skipped and named in a warning); `WavReader` memory-maps files instead of reading them onto
+the Java heap; `App` reports sample memory and heap use after loading; `run.ps1` holds the JVM options.
+
+Measured on this 8 GB machine (`memrun.ps1`: peak working set of the real JVM process, sampled every
+200 ms; free RAM before each run ≈ 4.2 GB):
+
+| Configuration | Samples | Heap in use after load | Peak RAM (working set) | Min free RAM |
+|---------------|---------|------------------------|------------------------|--------------|
+| all ranks (before) | 3,179 MiB | would not fit in the default 2 GB heap | | |
+| playable ranks, read into heap, G1 default, -Xmx4g | 2,175 MiB | 2,724 MiB | 3,319 MiB | 0.88 GB |
+| playable ranks, read into heap, ParallelGC | 2,175 MiB | 2,183 MiB | 3,428 MiB | 0.55 GB |
+| playable ranks, read into heap, G1 32 MB regions | 2,175 MiB | 2,208 MiB | 3,264 MiB | 0.91 GB |
+| playable ranks, read into heap, ParallelGC -Xmx2600m | | out of memory | | |
+| memory-mapped, G1 default, -Xmx4g | 2,175 MiB | 2,725 MiB | 2,850 MiB | 1.65 GB |
+| **memory-mapped, G1 32 MB regions, -Xmx4g (`run.ps1`)** | 2,175 MiB | **2,215 MiB** | **2,813 MiB** | **1.77 GB** |
+| memory-mapped, ParallelGC, -Xmx4g | 2,175 MiB | 2,179 MiB | 3,673 MiB | 1.49 GB |
+
+- G1's default 2 MB regions waste about 0.5 GB on multi-megabyte sample arrays; 32 MB regions remove
+  almost all of it.
+- Reading whole files onto the heap created 4.8 GB of temporary arrays during loading; memory-mapping
+  removes them (decoding is unchanged: all render regressions bit-identical, all files decode).
+- Deduplication: none of the 3,855 loaded files has the same audio as another, so file-level
+  deduplication saves nothing for Melcer (stops that borrow ranks already share samples).
+- Demo: chord on 'I Nachthorn 8'' (4 pipes), 'I Prinzipal 4'' added with the chord held (8 pipes),
+  released to 0; no dropped notes. Load time 2.9 s.
+
+Next memory steps (stage two): keep release tails (about 0.7 GB as 16-bit) or attacks beyond a
+prefix on disk and stream them from a separate I/O thread with prefetching, never reading files on
+the audio thread.

@@ -100,6 +100,11 @@ public final class App {
                 organ.ranks().size(), organ.pipes().size(), organ.keyActions().size());
         System.out.printf("  parsed in %d ms; loaded %d samples in %d ms%n",
                 (t1 - t0) / 1_000_000, samples.byId().size(), (t2 - t1) / 1_000_000);
+        long sampleBytes = samples.byId().values().stream().mapToLong(s -> s.data.length * 2L).sum();
+        System.gc();
+        Runtime rt = Runtime.getRuntime();
+        System.out.printf("  memory: samples %d MiB, Java heap in use %d MiB (limit %d MiB)%n", sampleBytes >> 20,
+                (rt.totalMemory() - rt.freeMemory()) >> 20, rt.maxMemory() >> 20);
         organ.warnings().forEach(w -> System.out.println("  warning: " + w));
         samples.warnings().forEach(w -> System.out.println("  warning: " + w));
 
@@ -124,8 +129,13 @@ public final class App {
 
         if (demo) {
             int[] chord = {48, 52, 55, 60};
-            Organ.Stop first = stops.get(0);
-            Organ.Stop second = stops.size() > 1 ? stops.get(1) : first;
+            // stops of the divisions the channel-1 keyboard plays directly (not through couplers)
+            Organ.Keyboard kb = console.keyboardOn(0);
+            List<Organ.Stop> playable = stops.stream().filter(s -> organ.keyActions().stream().anyMatch(a ->
+                    a.control() == null && a.source().equals(kb) && a.target().equals(s.division()))).toList();
+            List<Organ.Stop> demoStops = playable.isEmpty() ? stops : playable;
+            Organ.Stop first = demoStops.get(0);
+            Organ.Stop second = demoStops.size() > 1 ? demoStops.get(1) : first;
             console.setEngaged(first.control(), true);
             System.out.println("Demo: chord on '" + first.name() + "'");
             for (int note : chord) {

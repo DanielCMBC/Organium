@@ -423,19 +423,31 @@ public final class OrganParser {
     }
 
     /**
-     * Loads every sample file used by the organ's pipes. Files are looked up as
+     * Loads the sample files of every pipe that a stop can play. Files are looked up as
      * {@code <sampleSetsRoot>/OrganInstallationPackages/<6-digit package id>/<path>}.
-     * Unsupported or missing files are reported as warnings; their pipes stay silent.
+     * Ranks no stop plays (for example tremulant alternate ranks and noise ranks, which Organium
+     * cannot sound yet) are skipped to save memory and named in a warning. Unsupported or missing
+     * files are reported as warnings; their pipes stay silent.
      */
     public static LoadedSamples loadSamples(Organ organ, Path sampleSetsRoot) {
+        Set<Integer> playable = new LinkedHashSet<>();
+        for (Stop s : organ.stops()) {
+            s.ranks().forEach(sr -> playable.add(sr.rank().id()));
+        }
+        ConcurrentLinkedQueue<String> warnings = new ConcurrentLinkedQueue<>();
+        List<String> skipped = organ.ranks().stream().filter(r -> !playable.contains(r.id())).map(Rank::name).toList();
+        if (!skipped.isEmpty()) {
+            warnings.add("Not loaded (no stop plays these ranks yet): " + String.join(", ", skipped));
+        }
         Set<Integer> used = new LinkedHashSet<>();
         for (Pipe p : organ.pipes()) {
-            used.add(p.attackSampleId());
-            p.releases().forEach(r -> used.add(r.sampleId()));
+            if (playable.contains(p.rankId())) {
+                used.add(p.attackSampleId());
+                p.releases().forEach(r -> used.add(r.sampleId()));
+            }
         }
         Path packages = sampleSetsRoot.resolve("OrganInstallationPackages");
         Map<Integer, Sample> loaded = new ConcurrentHashMap<>();
-        ConcurrentLinkedQueue<String> warnings = new ConcurrentLinkedQueue<>();
         used.parallelStream().forEach(id -> {
             SampleFile file = organ.sampleFiles().get(id);
             if (file == null) {
