@@ -18,6 +18,8 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -25,9 +27,14 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
+import java.awt.Insets;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.Transparency;
 import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -48,20 +55,29 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * The organ's console screen: its display pages, one at a time, drawn at the organ's fixed pixel
- * size. Each page is a static background with every switch's current image composited over it at
- * absolute coordinates, and text (such as stop names) drawn on top.
+ * The organ's console screen: its display pages, one at a time. Each page is a static background with
+ * every switch's current image composited over it at absolute coordinates, and text (such as stop
+ * names) drawn on top.
  *
- * Everything that doesn't change is prepared for every page before the window opens. Images not tied
- * to a switch are flattened, in layer order, into the page's background surface. Each switch's
- * engaged and disengaged bitmaps are converted to screen-compatible images, and positions, fonts and
- * text baselines are stored in flat arrays. A paint then only blits the background and one sprite per
- * switch and draws the page's strings, and allocates nothing.
+ * Everything that doesn't change is prepared for every page before the window opens, at the organ's
+ * design size. Images not tied to a switch are flattened, in layer order, into the page's background
+ * surface. Each switch's engaged and disengaged bitmaps are converted to screen-compatible images, and
+ * positions, fonts and text baselines are stored in flat arrays.
  * (A plain image layered above a switch is flattened under it; no organ seen so far overlaps them.)
  *
+ * The console is scaled proportionally to fit the window ({@link ConsoleScale}): the window opens as
+ * large as the screen's working area allows, up to the design size, and can be resized or maximised;
+ * the console is centred with bars on two sides. For the current scale, the visible page's background,
+ * sprites and fonts are prepared once more as a {@link View}, so a paint only blits the background and
+ * one sprite per switch and draws the page's strings. The paint code allocates nothing itself; Java2D's
+ * drawImage allocates 32-96 bytes per call internally (measured on JDK 25). At scale 1 the view uses
+ * the design images themselves. While the window is being resized, the last view is drawn stretched
+ * until the size has settled and the view is rebuilt. All of this runs on the event thread.
+ *
  * Pressing the mouse inside a clickable switch's bounding box on the visible page toggles it through
- * {@link Console}, which rebuilds the key routing table, then repaints. Page Down/Page Up cycle
- * through the pages; 1-9 jump to a page by its position in page ID order.
+ * {@link Console}, which rebuilds the key routing table, then repaints; the mouse position is mapped
+ * back to design coordinates, so hit boxes are the organ's own. Page Down/Page Up cycle through the
+ * pages; 1-9 jump to a page by its position in page ID order.
  */
 @SuppressWarnings("serial") // Swing components, never serialized
 public final class ConsoleWindow extends JFrame {
@@ -71,6 +87,7 @@ public final class ConsoleWindow extends JFrame {
     private final Page[] pages;      // in page ID order
     private final List<String> warnings;
     private final Surface surface;
+    private final GraphicsConfiguration screen;
     private int active;              // index into pages of the page on screen; event thread only
 
     private ConsoleWindow(Console console, Loader loaded, Runnable onClose) {
@@ -86,14 +103,30 @@ public final class ConsoleWindow extends JFrame {
                 onClose.run();
             }
         });
+        screen = loaded.screen;
         surface = new Surface(console, loaded.width, loaded.height);
         bindPageKeys(surface.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW));
-        setResizable(false); // before pack(), so the frame is sized around the fixed surface
         add(surface);
-        pack();
-        setLocationRelativeTo(null);
+        pack(); // around the design size; shrunk below if the screen is smaller
+        fitToScreen(loaded.width, loaded.height);
         showPage(active);
         setVisible(true);
+    }
+
+    /** Sizes the window so the whole console fits in the screen's working area, never above design size, and centres it. */
+    private void fitToScreen(int designWidth, int designHeight) {
+        GraphicsConfiguration gc = getGraphicsConfiguration();
+        Rectangle bounds = gc.getBounds();
+        Insets taskbar = Toolkit.getDefaultToolkit().getScreenInsets(gc);
+        Rectangle area = new Rectangle(bounds.x + taskbar.left, bounds.y + taskbar.top,
+                bounds.width - taskbar.left - taskbar.right, bounds.height - taskbar.top - taskbar.bottom);
+        Insets frame = getInsets();
+        int frameWidth = frame.left + frame.right;
+        int frameHeight = frame.top + frame.bottom;
+        double scale = Math.min(1, ConsoleScale.fitScale(designWidth, designHeight,
+                area.width - frameWidth, area.height - frameHeight));
+        setSize((int) Math.round(designWidth * scale) + frameWidth, (int) Math.round(designHeight * scale) + frameHeight);
+        setLocation(area.x + Math.max(0, (area.width - getWidth()) / 2), area.y + Math.max(0, (area.height - getHeight()) / 2));
     }
 
     /**
@@ -139,28 +172,68 @@ public final class ConsoleWindow extends JFrame {
     private void showPage(int index) {
         active = index;
         setTitle(pages.length > 1 ? organName + " - " + pages[index].name : organName);
+        surface.prepareActivePage();
         surface.repaint();
     }
 
     /** Draws the visible page; switch states are read from the console on every paint. */
     private final class Surface extends JComponent {
+        private static final int RESCALE_DELAY_MS = 150; // after the last resize event
+
         private final Console console;
+        private final ConsoleScale fit;
+        private final View[] views = new View[pages.length]; // per page, each at views[i].scale; built on demand
+        private final Timer rescale;
 
         Surface(Console console, int width, int height) {
             this.console = console;
+            fit = new ConsoleScale(width, height);
             setOpaque(true);
             setPreferredSize(new Dimension(width, height));
+            rescale = new Timer(RESCALE_DELAY_MS, e -> {
+                prepareActivePage();
+                repaint();
+            });
+            rescale.setRepeats(false);
+            addComponentListener(new ComponentAdapter() {
+                @Override
+                public void componentResized(ComponentEvent e) {
+                    fit.fit(getWidth(), getHeight());
+                    View v = views[active];
+                    if (v == null || v.scale != fit.scale()) {
+                        rescale.restart(); // until it fires, paint stretches the last view
+                    }
+                    repaint();
+                }
+            });
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mousePressed(MouseEvent e) {
-                    if (e.getButton() == MouseEvent.BUTTON1) {
-                        press(e.getX(), e.getY());
+                    if (e.getButton() == MouseEvent.BUTTON1 && fit.contains(e.getX(), e.getY())) {
+                        press(fit.toDesignX(e.getX()), fit.toDesignY(e.getY()));
                     }
                 }
             });
         }
 
-        /** Toggles the topmost clickable switch under the point on the visible page. */
+        /** Makes sure the visible page has a view at the current scale; views at other scales are dropped. */
+        void prepareActivePage() {
+            if (fit.scale() <= 0) {
+                return; // not laid out yet, or no room
+            }
+            View v = views[active];
+            if (v != null && v.scale == fit.scale()) {
+                return;
+            }
+            for (int i = 0; i < views.length; i++) {
+                if (views[i] != null && views[i].scale != fit.scale()) {
+                    views[i] = null; // frees the images of a view at an old scale
+                }
+            }
+            views[active] = new View(pages[active], fit, screen);
+        }
+
+        /** Toggles the topmost clickable switch under the point (design coordinates) on the visible page. */
         private void press(int x, int y) {
             Page p = pages[active];
             for (int i = p.switches.length - 1; i >= 0; i--) {
@@ -174,33 +247,161 @@ public final class ConsoleWindow extends JFrame {
 
         @Override
         protected void paintComponent(Graphics g) {
-            Page p = pages[active];
-            g.drawImage(p.background, 0, 0, null);
-            for (int i = 0; i < p.switches.length; i++) {
-                BufferedImage sprite = console.isEngaged(p.switches[i]) ? p.engaged[i] : p.disengaged[i];
-                if (sprite != null) {
-                    g.drawImage(sprite, p.left[i], p.top[i], null);
-                }
-            }
-            if (p.text.length == 0) {
-                return;
-            }
             Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
-            Font font = null;
-            Color color = null;
-            for (int i = 0; i < p.text.length; i++) { // sorted by style, so fonts rarely change
-                if (p.textFont[i] != font) {
-                    font = p.textFont[i];
-                    g2.setFont(font);
-                }
-                if (p.textColor[i] != color) {
-                    color = p.textColor[i];
-                    g2.setColor(color);
-                }
-                g2.drawString(p.text[i], p.textX[i], p.textY[i]);
+            int ox = fit.offsetX();
+            int oy = fit.offsetY();
+            g2.setColor(Color.BLACK); // the bars beside the console
+            if (ox > 0) {
+                g2.fillRect(0, 0, ox, getHeight());
+                g2.fillRect(ox + fit.width(), 0, getWidth() - ox - fit.width(), getHeight());
             }
+            if (oy > 0) {
+                g2.fillRect(0, 0, getWidth(), oy);
+                g2.fillRect(0, oy + fit.height(), getWidth(), getHeight() - oy - fit.height());
+            }
+            View v = views[active];
+            if (v == null) {
+                prepareActivePage(); // a paint before the first resize event
+                v = views[active];
+                if (v == null) {
+                    return;
+                }
+            }
+            Page p = pages[active];
+            double stretch = fit.scale() / v.scale; // 1 except while a resize is settling
+            g2.translate(ox, oy);
+            if (stretch != 1) {
+                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g2.scale(stretch, stretch);
+            }
+            g2.drawImage(v.background, 0, 0, null);
+            for (int i = 0; i < p.switches.length; i++) {
+                BufferedImage sprite = console.isEngaged(p.switches[i]) ? v.engaged[i] : v.disengaged[i];
+                if (sprite != null) {
+                    g2.drawImage(sprite, v.x[i], v.y[i], null);
+                }
+            }
+            if (p.text.length > 0) {
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+                Font font = null;
+                Color color = null;
+                for (int i = 0; i < p.text.length; i++) { // sorted by style, so fonts rarely change
+                    if (v.textFont[i] != font) {
+                        font = v.textFont[i];
+                        g2.setFont(font);
+                    }
+                    if (p.textColor[i] != color) {
+                        color = p.textColor[i];
+                        g2.setColor(color);
+                    }
+                    g2.drawString(p.text[i], v.textX[i], v.textY[i]);
+                }
+            }
+            if (stretch != 1) {
+                g2.scale(1 / stretch, 1 / stretch);
+            }
+            g2.translate(-ox, -oy);
+        }
+    }
+
+    /**
+     * A page prepared for drawing at one scale: background and sprites resampled to their scaled
+     * pixel size, positions relative to the console's top left corner, fonts at the scaled size. At
+     * scale 1 it uses the page's design images, coordinates and fonts unchanged.
+     */
+    private static final class View {
+        final double scale;
+        final BufferedImage background;
+        final BufferedImage[] engaged;
+        final BufferedImage[] disengaged;
+        final int[] x;
+        final int[] y;
+        final Font[] textFont;
+        final float[] textX;
+        final float[] textY;
+
+        View(Page p, ConsoleScale fit, GraphicsConfiguration screen) {
+            scale = fit.scale();
+            int n = p.switches.length;
+            engaged = new BufferedImage[n];
+            disengaged = new BufferedImage[n];
+            x = new int[n];
+            y = new int[n];
+            background = resample(p.background, fit.width(), fit.height(), screen);
+            Map<BufferedImage, BufferedImage> done = new HashMap<>(); // sprites shared between switches
+            for (int i = 0; i < n; i++) {
+                x[i] = fit.scaled(p.left[i]);
+                y[i] = fit.scaled(p.top[i]);
+                engaged[i] = sprite(p.engaged[i], p.left[i], p.top[i], fit, screen, done);
+                disengaged[i] = sprite(p.disengaged[i], p.left[i], p.top[i], fit, screen, done);
+            }
+            int m = p.text.length;
+            textFont = new Font[m];
+            textX = new float[m];
+            textY = new float[m];
+            Map<Font, Font> fonts = new HashMap<>();
+            for (int i = 0; i < m; i++) {
+                textFont[i] = scale == 1 ? p.textFont[i]
+                        : fonts.computeIfAbsent(p.textFont[i], f -> f.deriveFont((float) (f.getSize2D() * scale)));
+                textX[i] = (float) (p.textX[i] * scale);
+                textY[i] = (float) (p.textY[i] * scale);
+            }
+        }
+
+        /** The sprite at the scale, sized so its edges land where the scaled design edges do. */
+        private static BufferedImage sprite(BufferedImage img, int left, int top, ConsoleScale fit,
+                                            GraphicsConfiguration screen, Map<BufferedImage, BufferedImage> done) {
+            if (img == null) {
+                return null;
+            }
+            int w = fit.scaled(left + img.getWidth()) - fit.scaled(left);
+            int h = fit.scaled(top + img.getHeight()) - fit.scaled(top);
+            if (w == img.getWidth() && h == img.getHeight()) {
+                return img;
+            }
+            BufferedImage cached = done.get(img);
+            if (cached != null && cached.getWidth() == w && cached.getHeight() == h) {
+                return cached;
+            }
+            BufferedImage out = resample(img, w, h, screen);
+            done.put(img, out);
+            return out;
+        }
+
+        /**
+         * Resamples to {@code w x h} with bilinear filtering, halving in steps first when shrinking to
+         * half or less, so every source pixel contributes. Returns the image itself if the size matches.
+         */
+        static BufferedImage resample(BufferedImage src, int w, int h, GraphicsConfiguration screen) {
+            w = Math.max(1, w);
+            h = Math.max(1, h);
+            if (src.getWidth() == w && src.getHeight() == h) {
+                return src;
+            }
+            boolean opaque = src.getTransparency() == Transparency.OPAQUE;
+            BufferedImage current = src;
+            int cw = src.getWidth();
+            int ch = src.getHeight();
+            while (cw / 2 >= w || ch / 2 >= h) {
+                cw = Math.max(w, cw / 2);
+                ch = Math.max(h, ch / 2);
+                current = draw(current, cw, ch, opaque
+                        ? screen.createCompatibleImage(cw, ch, Transparency.OPAQUE)
+                        : new BufferedImage(cw, ch, BufferedImage.TYPE_INT_ARGB_PRE));
+            }
+            return draw(current, w, h, screen.createCompatibleImage(w, h,
+                    opaque ? Transparency.OPAQUE : Transparency.TRANSLUCENT));
+        }
+
+        private static BufferedImage draw(BufferedImage src, int w, int h, BufferedImage dst) {
+            Graphics2D g = dst.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g.setComposite(AlphaComposite.Src);
+            g.drawImage(src, 0, 0, w, h, null);
+            g.dispose();
+            return dst;
         }
     }
 
@@ -280,9 +481,9 @@ public final class ConsoleWindow extends JFrame {
         final int width;
         final int height;
         final List<String> warnings;
+        final GraphicsConfiguration screen;
 
         private final Path packages;
-        private final GraphicsConfiguration screen;
         private final Set<String> fontFamilies;
         private final Map<Path, BufferedImage> files = new HashMap<>();
         private final Map<String, BufferedImage> sprites = new HashMap<>();
