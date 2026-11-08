@@ -37,6 +37,8 @@ import java.util.List;
  * App [--asio[=driver]] [--demo] [sample.wav] [release.wav]          play one sample across the keyboard
  * App --list-asio
  * </pre>
+ * --asio-panel uses ASIO and opens the driver's settings window once audio has started (for ASIO4ALL:
+ * which output device it plays through).
  * Without sample files a test pipe is synthesized; --demo plays a chord instead of listening to MIDI.
  * --pan chooses how mono pipes are placed in stereo: hauptwerk (default; the table measured from
  * Hauptwerk 4.2.1) or centred (every pipe in the middle). --trim sets the master output level in dB,
@@ -51,6 +53,7 @@ public final class App {
     private boolean useAsio;
     private String asioDriver;
     private boolean demo;
+    private boolean asioPanel;
     private String organFile;
     private PanLaw panLaw = MeasuredPanTable.hauptwerk();
     private double trimDb = DEFAULT_TRIM_DB;
@@ -67,6 +70,9 @@ public final class App {
             } else if (arg.startsWith("--asio=")) {
                 app.useAsio = true;
                 app.asioDriver = arg.substring("--asio=".length());
+            } else if (arg.equals("--asio-panel")) {
+                app.useAsio = true;
+                app.asioPanel = true;
             } else if (arg.equals("--demo")) {
                 app.demo = true;
             } else if (arg.equals("--pan=centred")) {
@@ -253,6 +259,14 @@ public final class App {
             System.out.printf("ASIO: %s, %d-frame buffer (%.1f ms), reported output latency %.1f ms%n",
                     asio.driverDescription(), asio.bufferFrames(), asio.bufferFrames() * 1000.0 / SAMPLE_RATE,
                     asio.outputLatencyFrames() * 1000.0 / SAMPLE_RATE);
+            if (asioPanel) {
+                System.out.println("Opening the ASIO driver's settings window...");
+                long t = System.nanoTime();
+                int result = asio.openControlPanel();
+                System.out.printf("ASIO settings window call returned %d after %.1f s%s%n", result,
+                        (System.nanoTime() - t) / 1e9, asio.resetRequested()
+                                ? "; the driver asks for a restart: quit and start again to apply the changes" : "");
+            }
             return asio;
         }
         JavaSoundOutput output = new JavaSoundOutput();

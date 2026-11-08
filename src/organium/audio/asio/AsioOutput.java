@@ -44,6 +44,7 @@ public final class AsioOutput implements AudioOutput {
     private static final int GET_CHANNEL_INFO = 18;
     private static final int CREATE_BUFFERS = 19;
     private static final int DISPOSE_BUFFERS = 20;
+    private static final int CONTROL_PANEL = 21;
     private static final int OUTPUT_READY = 23;
     private static final int VTABLE_SLOTS = 24;
 
@@ -286,6 +287,16 @@ public final class AsioOutput implements AudioOutput {
             arena.close();
             arena = null;
         }
+    }
+
+    /**
+     * Opens the driver's own settings window (ASIOControlPanel), as hosts' "ASIO settings" buttons do:
+     * for ASIO4ALL, which output device it uses, buffer size and so on. Returns the ASIO result code
+     * (0 = ASE_OK). Call from the thread that started the driver. A driver may block until its window
+     * is closed or return at once; changes may make it ask for a restart ({@link #resetRequested()}).
+     */
+    public int openControlPanel() {
+        return callInt(CONTROL_PANEL);
     }
 
     public String driverDescription() {
