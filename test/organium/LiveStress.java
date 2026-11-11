@@ -41,16 +41,21 @@ import java.util.Random;
  * Options (for startup diagnosis):
  *   --no-screenshots   take no screenshots of the console window
  *   --stop-after=S     end the performance S seconds after it starts, even mid-round
+ *   --stage0-release   use the release transition from before the crossfade fix (A/B comparisons)
  * Every run also writes startup-callbacks.csv (the time and render time of the first callbacks,
  * from the very first one) and startup-events.csv (what the harness did, on the same clock: zero
  * is the moment AsioOutput.start() was called).
  */
 public final class LiveStress {
     private static final int RATE = 48000;
-    private static final List<String> EVENTS = java.util.Collections.synchronizedList(new ArrayList<>());
+    private record Event(long nanoTime, long uptimeMs, String what) {
+    }
+
+    private static final List<Event> EVENTS = java.util.Collections.synchronizedList(new ArrayList<>());
     private static volatile long clock0 = System.nanoTime(); // reset when ASIO is started
     private static volatile long stopAt = Long.MAX_VALUE;
     private static boolean screenshots = true;
+    private static boolean stage0Release;  // --stage0-release: the release transition before the crossfade fix, for A/B
     private boolean firstNote = true;
 
     private final Console console;
@@ -153,10 +158,10 @@ public final class LiveStress {
 
     /** Logs an event with its time since ASIO was started, to line up with the callback trace. */
     private static void mark(String what) {
-        double t = (System.nanoTime() - clock0) / 1e6;
+        long now = System.nanoTime();
         long uptime = ManagementFactory.getRuntimeMXBean().getUptime(); // the clock of the -Xlog "uptime" decoration
-        EVENTS.add(String.format(Locale.ROOT, "%.3f,%d,%s", t, uptime, what));
-        System.out.printf(Locale.ROOT, "  [%9.3f ms, uptime %6d ms] %s%n", t, uptime, what);
+        EVENTS.add(new Event(now, uptime, what));
+        System.out.printf(Locale.ROOT, "  [uptime %6d ms] %s%n", uptime, what);
     }
 
     /** Records when each of the first callbacks started and how long it rendered. Allocation-free. */
@@ -400,6 +405,8 @@ public final class LiveStress {
         for (String a : all) {
             if (a.equals("--no-screenshots")) {
                 screenshots = false;
+            } else if (a.equals("--stage0-release")) {
+                stage0Release = true;
             } else if (a.startsWith("--stop-after=")) {
                 stopAfter = Double.parseDouble(a.substring("--stop-after=".length()));
             } else if (a.startsWith("--")) {
@@ -425,7 +432,9 @@ public final class LiveStress {
         System.out.printf("%s: %d samples, %d MiB, loaded in %.1f s%n", organ.name(), byId.size(), sampleBytes >> 20,
                 (t1 - t0) / 1e9);
 
-        VoiceEngine engine = new VoiceEngine(4096, organ.pipes().size(), RATE, 0.05f);
+        VoiceEngine engine = new VoiceEngine(4096, organ.pipes().size(), RATE,
+                stage0Release ? organium.audio.ReleaseTransition.STAGE0 : organium.audio.ReleaseTransition.DEFAULT);
+        mark("release transition: " + (stage0Release ? "stage0" : "default"));
         engine.setOutputTrimDecibels(-10);
         engine.warmUp();
         Console console = new Console(organ, byId, engine, MeasuredPanTable.hauptwerk());
@@ -527,8 +536,10 @@ public final class LiveStress {
         mark("callback thread priority after boost: " + asio.callbackThreadPriority());
         asio.stop();
         trace.write(outDir.resolve("startup-callbacks.csv"));
+        // times relative to the ASIO start call (negative before it)
         Files.write(outDir.resolve("startup-events.csv"), (Iterable<String>) () -> java.util.stream.Stream.concat(
-                java.util.stream.Stream.of("t_ms,uptime_ms,event"), new ArrayList<>(EVENTS).stream()).iterator());
+                java.util.stream.Stream.of("t_ms,uptime_ms,event"), new ArrayList<>(EVENTS).stream().map(e -> String.format(
+                        Locale.ROOT, "%.3f,%d,%s", (e.nanoTime() - clock0) / 1e6, e.uptimeMs(), e.what()))).iterator());
         SwingUtilities.invokeLater(window::dispose);
 
         long period = monitor.periodNanos();

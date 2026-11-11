@@ -51,7 +51,7 @@ public final class ConsoleWindowCheck {
             Files.createDirectories(shots);
         }
         Organ organ = OrganParser.parse(def);
-        VoiceEngine engine = new VoiceEngine(64, organ.pipes().size(), 48000, 0.05f);
+        VoiceEngine engine = new VoiceEngine(64, organ.pipes().size(), 48000);
         Console console = new Console(organ, Map.of(), engine);
         ConsoleWindow window = ConsoleWindow.open(console, OrganParser.sampleSetsRootOf(def), () -> { });
         Robot robot = new Robot();

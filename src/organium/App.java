@@ -115,7 +115,7 @@ public final class App {
         organ.warnings().forEach(w -> System.out.println("  warning: " + w));
         samples.warnings().forEach(w -> System.out.println("  warning: " + w));
 
-        VoiceEngine engine = new VoiceEngine(4096, organ.pipes().size(), SAMPLE_RATE, 0.05f);
+        VoiceEngine engine = new VoiceEngine(4096, organ.pipes().size(), SAMPLE_RATE);
         engine.setOutputTrimDecibels(trimDb);
         engine.warmUp();
         AudioOutput output = startOutput(engine);
@@ -223,7 +223,7 @@ public final class App {
             release = ReleaseSet.of(TestPipe.release(SAMPLE_RATE));
         }
 
-        VoiceEngine engine = new VoiceEngine(1024, Console.CHANNELS * 128, SAMPLE_RATE, 0.05f);
+        VoiceEngine engine = new VoiceEngine(1024, Console.CHANNELS * 128, SAMPLE_RATE);
         engine.setOutputTrimDecibels(trimDb);
         engine.warmUp();
         AudioOutput output = startOutput(engine);

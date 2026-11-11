@@ -1,0 +1,9 @@
+t_ms,uptime_ms,event
+-2371.487,5512,release transition: stage0
+-2045.791,5821,console window opening
+-172.381,7694,console window open
+0.007,7866,ASIO start called
+395.302,8262,ASIO start returned
+404.098,8270,round 0 begins
+421.141,8288,first note on
+31494.260,39361,callback thread priority after boost: 15

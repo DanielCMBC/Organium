@@ -19,7 +19,7 @@ public final class ProbeDiag {
                 organ.stops().size(), organ.keyboards().size(), ls.byId().size());
         organ.warnings().stream().limit(8).forEach(w -> System.out.println("  organ warning: " + w));
         ls.warnings().stream().limit(8).forEach(w -> System.out.println("  sample warning: " + w));
-        VoiceEngine engine = new VoiceEngine(64, organ.pipes().size(), 48000, 0.05f);
+        VoiceEngine engine = new VoiceEngine(64, organ.pipes().size(), 48000);
         Console c = new Console(organ, ls.byId(), engine);
         for (Organ.Stop s : organ.stops()) {
             System.out.printf("  stop %-30s switch %d '%s' default %s engaged %s ranks %d%n", s.name(), s.control().id(),

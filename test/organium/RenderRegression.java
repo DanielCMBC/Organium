@@ -1,6 +1,7 @@
 package organium;
 
 import organium.audio.ReleaseSet;
+import organium.audio.ReleaseTransition;
 import organium.audio.Sample;
 import organium.audio.VoiceEngine;
 import organium.io.OrganParser;
@@ -24,8 +25,14 @@ import java.util.function.Consumer;
 /**
  * Renders deterministic scenarios through the engine's public API and records the raw output.
  *
- *   RenderRegression record <dir> [organ.xml]   write <scenario>.f32 (little-endian float stereo) per scenario
- *   RenderRegression compare <dir> [organ.xml]  render again and compare with the recorded files
+ *   RenderRegression record <dir> [organ.xml] [--transition=default|stage0]
+ *       write <scenario>.f32 (little-endian float stereo) per scenario, and <dir>/TRANSITION naming
+ *       the release transition the engine used (default: ReleaseTransition.DEFAULT)
+ *   RenderRegression compare <dir> [organ.xml]  render again with the baseline's transition and compare
+ *   RenderRegression bench                      render cost: steady voices, and release churn
+ *
+ * Baselines recorded before release transitions existed (regression/stage-0) have no TRANSITION
+ * file; they were rendered with what is now ReleaseTransition.STAGE0, and are compared with it.
  *
  * The engine is driven from one thread: commands are queued, then render() is called in fixed
  * 256-frame blocks, so the output is fully determined by the scenario script.
@@ -180,7 +187,7 @@ public final class RenderRegression {
         com.sun.management.ThreadMXBean mx = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
         float[] out = new float[BLOCK * 2];
         for (int round = 0; round < 7; round++) {
-            VoiceEngine e = new VoiceEngine(256, 4096, RATE, 2.0f);   // 2 s crossfade keeps released voices fading
+            VoiceEngine e = new VoiceEngine(256, 4096, RATE, new ReleaseTransition(2.0f, 2.0f, true)); // long crossfade
             e.warmUp();
             for (int k = 0; k < 200; k++) {
                 e.noteOn(k, (k & 1) == 0 ? mono : stereo, ReleaseSet.of(tail), 0.004f, 0.8f + k * 0.001f);
@@ -207,24 +214,100 @@ public final class RenderRegression {
         }
     }
 
+    /**
+     * Render cost of the release transition itself: 200 keys on a 256-voice engine, and every block
+     * 8 keys are released and 8 others struck, so voices constantly hand over to release samples,
+     * crossfade, and get stolen. Reports the cost per block and allocation.
+     */
+    private static void churnBench(String name, ReleaseTransition transition) {
+        System.out.println("churn with " + name + " transition " + transition);
+        Sample mono = synth(1, 96000, 24000, 90000, -1, 1);
+        Sample stereo = synth(2, 96000, 24000, 90000, -1, 2);
+        ReleaseSet tails = ReleaseSet.of(synth(2, 96000, -1, -1, -1, 4));
+        com.sun.management.ThreadMXBean mx = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+        float[] out = new float[BLOCK * 2];
+        for (int round = 0; round < 7; round++) {
+            VoiceEngine e = new VoiceEngine(256, 4096, RATE, transition);
+            e.warmUp();
+            boolean[] down = new boolean[200];
+            for (int k = 0; k < 200; k += 2) {
+                e.noteOn(k, (k & 2) == 0 ? mono : stereo, tails, 0.004f, 0.8f + k * 0.001f);
+                down[k] = true;
+            }
+            long seed = 20261108;
+            int blocks = 3000;
+            long id = Thread.currentThread().threadId();
+            long renderAlloc = 0; // bytes allocated inside render() only
+            long t0 = 0;
+            int maxVoices = 0;
+            for (int i = 0; i < 1000 + blocks; i++) {
+                if (i == 1000) {
+                    t0 = System.nanoTime();
+                }
+                for (int j = 0; j < 8; j++) {
+                    seed = seed * 6364136223846793005L + 1442695040888963407L;
+                    int k = (int) ((seed >>> 33) % 200);
+                    if (down[k]) {
+                        e.noteOff(k);
+                    } else {
+                        e.noteOn(k, (k & 2) == 0 ? mono : stereo, tails, 0.004f, 0.8f + k * 0.001f);
+                    }
+                    down[k] = !down[k];
+                }
+                long r0 = mx.getThreadAllocatedBytes(id);
+                e.render(out, BLOCK);
+                if (i >= 1000) {
+                    renderAlloc += mx.getThreadAllocatedBytes(id) - r0;
+                }
+                maxVoices = Math.max(maxVoices, e.activeVoices());
+            }
+            long t1 = System.nanoTime();
+            System.out.printf("churn round %d: up to %d active voices, %.1f us per %d-frame block, dropped notes %d, render() allocated %d bytes in %d blocks%n",
+                    round, maxVoices, (t1 - t0) / 1000.0 / blocks, BLOCK, e.droppedNotes(), renderAlloc, blocks);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         String mode = args[0];
         if (mode.equals("bench")) {
             bench();
+            churnBench("stage-0", ReleaseTransition.STAGE0);
+            churnBench("default", ReleaseTransition.DEFAULT);
             return;
         }
         Path dir = Path.of(args[1]);
         Files.createDirectories(dir);
+        String organFile = null;
+        String transitionName = "default";
+        for (int i = 2; i < args.length; i++) {
+            if (args[i].startsWith("--transition=")) {
+                transitionName = args[i].substring("--transition=".length());
+            } else {
+                organFile = args[i];
+            }
+        }
+        Path transitionFile = dir.resolve("TRANSITION");
+        if (mode.equals("record")) {
+            Files.writeString(transitionFile, transitionName + System.lineSeparator());
+        } else {
+            transitionName = Files.exists(transitionFile) ? Files.readString(transitionFile).trim() : "stage0";
+        }
+        ReleaseTransition transition = switch (transitionName) {
+            case "default" -> ReleaseTransition.DEFAULT;
+            case "stage0" -> ReleaseTransition.STAGE0;
+            default -> throw new IllegalArgumentException("Unknown transition " + transitionName);
+        };
+        System.out.println("release transition: " + transitionName + " " + transition);
         Map<String, Script> scenarios = new java.util.LinkedHashMap<>(engineScenarios());
-        if (args.length > 2) {
-            Path def = Path.of(args[2]);
+        if (organFile != null) {
+            Path def = Path.of(organFile);
             Organ organ = OrganParser.parse(def);
             Map<Integer, Sample> samples = OrganParser.loadSamples(organ, OrganParser.sampleSetsRootOf(def)).byId();
             scenarios.put("console-stop-changes", consoleScenario(organ, samples, c -> { }));
         }
         int failures = 0;
         for (Map.Entry<String, Script> s : scenarios.entrySet()) {
-            VoiceEngine engine = new VoiceEngine(256, 4096, RATE, 0.05f);
+            VoiceEngine engine = new VoiceEngine(256, 4096, RATE, transition);
             Renderer r = new Renderer(engine);
             s.getValue().run(engine, r);
             float[] audio = r.all();

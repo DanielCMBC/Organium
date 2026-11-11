@@ -37,7 +37,7 @@ public final class HauptwerkComparison {
         Path def = Path.of(args[0]);
         Organ organ = OrganParser.parse(def);
         Map<Integer, Sample> samples = OrganParser.loadSamples(organ, OrganParser.sampleSetsRootOf(def)).byId();
-        VoiceEngine engine = new VoiceEngine(256, organ.pipes().size(), RATE, 0.05f);
+        VoiceEngine engine = new VoiceEngine(256, organ.pipes().size(), RATE);
         engine.setOutputTrimDecibels(-10);   // App default: Hauptwerk's default output level adjustment
         Console console = new Console(organ, samples, engine, MeasuredPanTable.hauptwerk());
 

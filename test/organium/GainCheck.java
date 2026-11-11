@@ -17,7 +17,7 @@ public final class GainCheck {
     }
 
     private static float[] render(Sample attack, ReleaseSet rel, float gl, float gr, Double trimDb) {
-        VoiceEngine e = new VoiceEngine(16, 16, 48000, 0.05f);
+        VoiceEngine e = new VoiceEngine(16, 16, 48000);
         if (trimDb != null) {
             e.setOutputTrimDecibels(trimDb);
         }

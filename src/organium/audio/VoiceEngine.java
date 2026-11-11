@@ -11,6 +11,18 @@ package organium.audio;
  * A mono sample is scaled into both channels by those gains; a stereo sample's left channel by the
  * left gain and its right channel by the right gain. Gains above 1 are allowed: the mix is float and
  * the outputs clamp to full scale.
+ *
+ * Note-off hands a sustaining voice over to its release as set by {@link ReleaseTransition}: by
+ * default a symmetric 10 ms crossfade, the release sample fading in while the sustain fades out.
+ *
+ * Voice stealing, when every voice is busy: a note-on (or a release sample starting) takes a free
+ * voice if there is one. Otherwise it steals a releasing voice, never a sustaining one, in this
+ * order: (1) the releasing voice with the lowest envelope among those not fading in, that is
+ * sustains fading out and settled release tails; (2) only if every releasing voice is still fading in,
+ * the one with the lowest envelope, which is the one that started most recently. Ties go to the lowest voice
+ * index, so the choice is deterministic. Releases that have only just begun are protected, but never
+ * at the cost of a new note: a note is dropped (and counted in {@link #droppedNotes()}) only when
+ * every voice is sustaining.
  */
 public final class VoiceEngine {
     private static final int FREE = 0;
@@ -20,7 +32,9 @@ public final class VoiceEngine {
 
     private final int maxVoices;
     private final int outputRate;
-    private final float releaseFadeStep;
+    private final float crossfadeStep;   // per frame, sustain out and release in, when a release sample exists
+    private final float fadeOutStep;     // per frame, sustain out when there is no release sample
+    private final boolean fadeInRelease;
     private final CommandQueue commands = new CommandQueue(16384);
     private final CommandQueue.Sink sink = new Sink();
 
@@ -45,10 +59,17 @@ public final class VoiceEngine {
     private volatile int activeVoices;
     private volatile long droppedNotes;
 
-    public VoiceEngine(int maxVoices, int maxKeys, int outputRate, float releaseCrossfadeSeconds) {
+    /** An engine with the default release transition ({@link ReleaseTransition#DEFAULT}). */
+    public VoiceEngine(int maxVoices, int maxKeys, int outputRate) {
+        this(maxVoices, maxKeys, outputRate, ReleaseTransition.DEFAULT);
+    }
+
+    public VoiceEngine(int maxVoices, int maxKeys, int outputRate, ReleaseTransition transition) {
         this.maxVoices = maxVoices;
         this.outputRate = outputRate;
-        this.releaseFadeStep = 1f / Math.max(1f, releaseCrossfadeSeconds * outputRate);
+        this.crossfadeStep = 1f / Math.max(1f, transition.crossfadeSeconds() * outputRate);
+        this.fadeOutStep = 1f / Math.max(1f, transition.fadeOutSecondsWithoutRelease() * outputRate);
+        this.fadeInRelease = transition.fadeInRelease();
         state = new int[maxVoices];
         key = new int[maxVoices];
         sample = new Sample[maxVoices];
@@ -347,6 +368,10 @@ public final class VoiceEngine {
                 freeVoice(v);
                 return;
             }
+            if (e >= 1f && de > 0f) {
+                e = 1f;          // a release that has faded in plays on at full level
+                de = 0f;
+            }
             p += st;
             if (looped && p >= s.loopEnd) {
                 p -= loopLength;
@@ -354,6 +379,7 @@ public final class VoiceEngine {
         }
         position[v] = p;
         env[v] = e;
+        envDelta[v] = de;
         soundedFrames[v] += frames;
     }
 
@@ -384,20 +410,33 @@ public final class VoiceEngine {
         return v;
     }
 
-    /** Pops a free voice in O(1); only when none is free, scans to steal the quietest releasing voice. */
+    /**
+     * Pops a free voice in O(1); only when none is free, scans for a releasing voice to steal (the
+     * policy in the class comment): the quietest not fading in, else the quietest fading in.
+     */
     private int findVoice() {
         if (freeCount > 0) {
             return freeStack[--freeCount];
         }
         int quietest = -1;
         float quietestEnv = Float.MAX_VALUE;
+        int quietestFadingIn = -1;
+        float quietestFadingInEnv = Float.MAX_VALUE;
         for (int v = 0; v < maxVoices; v++) {
-            if (state[v] == RELEASE && env[v] < quietestEnv) {
+            if (state[v] != RELEASE) {
+                continue;
+            }
+            if (envDelta[v] > 0f) {
+                if (env[v] < quietestFadingInEnv) {
+                    quietestFadingInEnv = env[v];
+                    quietestFadingIn = v;
+                }
+            } else if (env[v] < quietestEnv) {
                 quietestEnv = env[v];
                 quietest = v;
             }
         }
-        return quietest;
+        return quietest >= 0 ? quietest : quietestFadingIn;
     }
 
     private void freeVoice(int v) {
@@ -410,18 +449,58 @@ public final class VoiceEngine {
         freeStack[freeCount++] = v;
     }
 
+    /**
+     * Hands a sustaining voice over to its release. The release voice is started while {@code v} is
+     * still sustaining, so stealing can never pick {@code v} itself; if no voice can be had for the
+     * release, the sustain fades out as for a pipe without a release sample.
+     */
     private void release(int v) {
         Sample attack = sample[v];
         ReleaseSet set = releases[v];
         Sample release = set != null ? set.select(soundedFrames[v] * 1000 / outputRate) : null;
         sustainVoice[key[v]] = -1;
-        state[v] = RELEASE;
-        envDelta[v] = -releaseFadeStep;
+        int r = -1;
         if (release != null) {
             int start = release == attack && attack.releaseOffset > 0 ? attack.releaseOffset : 0;
             double ratio = step[v] * release.sampleRate / attack.sampleRate;
-            startVoice(key[v], release, RELEASE, gainL[v], gainR[v], ratio, start, false);
+            r = startVoice(key[v], release, RELEASE, gainL[v], gainR[v], ratio, start, false);
+            if (r >= 0 && fadeInRelease) {
+                env[r] = 0f;
+                envDelta[r] = crossfadeStep;
+            }
         }
+        state[v] = RELEASE;
+        envDelta[v] = -(r >= 0 ? crossfadeStep : fadeOutStep);
+    }
+
+    // ---- read-only views for tests (package-private; call only from the thread that renders) ----
+
+    static final int STATE_FREE = FREE;
+    static final int STATE_SUSTAIN = SUSTAIN;
+    static final int STATE_RELEASE = RELEASE;
+
+    int maxVoices() {
+        return maxVoices;
+    }
+
+    int voiceState(int v) {
+        return state[v];
+    }
+
+    int voiceKey(int v) {
+        return key[v];
+    }
+
+    float voiceEnvelope(int v) {
+        return env[v];
+    }
+
+    float voiceEnvelopeDelta(int v) {
+        return envDelta[v];
+    }
+
+    Sample voiceSample(int v) {
+        return sample[v];
     }
 
     private final class Sink implements CommandQueue.Sink {
