@@ -20,6 +20,7 @@ import organium.organ.Organ.Stop;
 import organium.organ.Organ.StopRank;
 import organium.organ.Organ.Switch;
 import organium.organ.Organ.SwitchImage;
+import organium.organ.Organ.SwitchLinkage;
 import organium.organ.Organ.TextInstance;
 import organium.organ.Organ.TextStyle;
 
@@ -57,6 +58,21 @@ public final class OrganParser {
     private static final String SWITCH_DEFAULT_ENGAGED = "e";
     private static final String GROUP_ELEMENT_SWITCH = "a";
     private static final String GROUP_ELEMENT_GROUP = "b";
+
+    // SwitchLinkage (research/switch-linkage-report.md). a/b confirmed by Hauptwerk's schema registration
+    // and every definition on hand; c, e, f, g strong (names plus St. Anne's data); d and h only by
+    // elimination, so rows carrying them, conditional rows, and pulse/change-state actions are skipped.
+    private static final String LINK_SOURCE = "a";
+    private static final String LINK_DEST = "b";
+    private static final String LINK_CONDITION_SWITCH = "c";
+    private static final String LINK_SOURCE_IF_ENGAGED = "d";   // hypothesis: SourceSwitchLinkIfEngaged
+    private static final String LINK_ENGAGE_ACTION = "f";
+    private static final String LINK_DISENGAGE_ACTION = "g";
+    // Action codes, in the order Hauptwerk lists them: 1 engage, 2 disengage, 3 change state,
+    // 4/5/6 pulse on/off/state, 7 none. Omitted f mirrors engaging, omitted g mirrors disengaging.
+    private static final int ACTION_ENGAGE = 1;
+    private static final int ACTION_DISENGAGE = 2;
+    private static final int ACTION_NONE = 7;
 
     private static final String STOP_DIVISION = "c";
     private static final String STOP_SWITCH = "d";
@@ -178,6 +194,8 @@ public final class OrganParser {
             switches.put(id, new Switch(switches.size(), id, o.get(NAME, "Switch " + id),
                     o.getBool(SWITCH_DEFAULT_ENGAGED, false)));
         }
+
+        List<SwitchLinkage> linkages = parseLinkages(doc, switches, warnings);
 
         Map<Integer, List<Switch>> groups = new LinkedHashMap<>();
         for (OdfObject o : doc.table("SwitchExclusiveSelectGroupElement")) {
@@ -309,8 +327,60 @@ public final class OrganParser {
         return new Organ(name, gainDb, List.copyOf(keyboards.values()), List.copyOf(divisions.values()),
                 List.copyOf(switches.values()), List.copyOf(stops), List.copyOf(keyActions),
                 List.copyOf(ranks.values()), List.copyOf(pipes),
-                groups.values().stream().map(List::copyOf).toList(), Map.copyOf(sampleFiles), display,
-                List.copyOf(warnings));
+                groups.values().stream().map(List::copyOf).toList(), List.copyOf(linkages),
+                Map.copyOf(sampleFiles), display, List.copyOf(warnings));
+    }
+
+    /**
+     * Reads the switch linkages Organium supports: unconditional, with engage/disengage/none actions.
+     * The rest are skipped and counted in one warning; their destinations simply don't follow.
+     */
+    private static List<SwitchLinkage> parseLinkages(OdfDocument doc, Map<Integer, Switch> switches,
+                                                     List<String> warnings) {
+        List<SwitchLinkage> linkages = new ArrayList<>();
+        Map<String, Integer> skipped = new LinkedHashMap<>();
+        int missing = 0;
+        for (OdfObject o : doc.table("SwitchLinkage")) {
+            Switch source = switches.get(o.getInt(LINK_SOURCE, -1));
+            Switch dest = switches.get(o.getInt(LINK_DEST, -1));
+            int onEngage = o.getInt(LINK_ENGAGE_ACTION, ACTION_ENGAGE);
+            int onDisengage = o.getInt(LINK_DISENGAGE_ACTION, ACTION_DISENGAGE);
+            String reason = null;
+            if (o.get(LINK_CONDITION_SWITCH) != null) {
+                reason = "conditional";
+            } else if (o.get(LINK_SOURCE_IF_ENGAGED) != null) {
+                reason = "source-state option (d)";
+            } else if (linkAction(onEngage) == null || linkAction(onDisengage) == null) {
+                reason = "pulse or change-state action";
+            }
+            if (reason != null) {
+                skipped.merge(reason, 1, Integer::sum);
+            } else if (source == null || dest == null) {
+                missing++;
+            } else {
+                linkages.add(new SwitchLinkage(source, dest, linkAction(onEngage), linkAction(onDisengage)));
+            }
+        }
+        if (!skipped.isEmpty()) {
+            int total = skipped.values().stream().mapToInt(Integer::intValue).sum();
+            List<String> parts = new ArrayList<>();
+            skipped.forEach((reason, n) -> parts.add(n + " " + reason));
+            warnings.add(total + " of " + doc.table("SwitchLinkage").size()
+                    + " switch linkages are not supported yet and were skipped (" + String.join(", ", parts) + ")");
+        }
+        if (missing > 0) {
+            warnings.add(missing + " switch linkages skipped: they name a missing switch");
+        }
+        return linkages;
+    }
+
+    private static SwitchLinkage.LinkAction linkAction(int code) {
+        return switch (code) {
+            case ACTION_ENGAGE -> SwitchLinkage.LinkAction.ENGAGE;
+            case ACTION_DISENGAGE -> SwitchLinkage.LinkAction.DISENGAGE;
+            case ACTION_NONE -> SwitchLinkage.LinkAction.NONE;
+            default -> null;
+        };
     }
 
     private static Display parseDisplay(OdfDocument doc, OdfObject general, Map<Integer, Switch> switches,

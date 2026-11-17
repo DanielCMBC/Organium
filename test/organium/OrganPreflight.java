@@ -24,7 +24,7 @@ public final class OrganPreflight {
     private static final Set<String> READ = Set.of("_General", "Keyboard", "Division", "Switch",
             "SwitchExclusiveSelectGroupElement", "Pipe_SoundEngine01", "Pipe_SoundEngine01_Layer",
             "Pipe_SoundEngine01_AttackSample", "Pipe_SoundEngine01_ReleaseSample", "Rank", "StopRank", "Stop",
-            "KeyAction", "Sample", "DisplayPage", "ImageSet", "ImageSetElement", "ImageSetInstance", "TextStyle",
+            "KeyAction", "SwitchLinkage", "Sample", "DisplayPage", "ImageSet", "ImageSetElement", "ImageSetInstance", "TextStyle",
             "TextInstance");
 
     public static void main(String[] args) throws Exception {

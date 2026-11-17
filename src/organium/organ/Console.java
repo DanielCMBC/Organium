@@ -10,6 +10,7 @@ import organium.organ.Organ.Pipe;
 import organium.organ.Organ.Stop;
 import organium.organ.Organ.StopRank;
 import organium.organ.Organ.Switch;
+import organium.organ.Organ.SwitchLinkage;
 import organium.organ.spatial.PanLaw;
 
 import java.util.ArrayList;
@@ -24,8 +25,9 @@ import java.util.function.BooleanSupplier;
  * Thread-safe; called from MIDI and UI threads, never from the audio thread.
  *
  * Key events are O(1) lookups in {@code route[channel][note]}, a flat list of the pipes that key
- * sounds under the current registration. The table is rebuilt whenever a switch changes; held
- * keys are then re-evaluated so engaging a stop under held keys makes those pipes speak.
+ * sounds under the current registration. The table is rebuilt once per switch action that changes a
+ * stop or coupler control (directly or through switch linkages); held keys are then re-evaluated so
+ * engaging a stop under held keys makes those pipes speak.
  * {@code drive[pipe]} counts how many held keys sound each pipe, so couplers reaching the same
  * pipe from two keys only release it when both keys are up.
  *
@@ -49,6 +51,22 @@ public final class Console {
     private final Map<Division, List<Stop>> stopsByDivision = new HashMap<>();
     private final List<List<Switch>> groupOfSwitch;
     private final boolean[] engaged;
+    // Switch linkages, indexed by switch: outgoing link indices; per link its destination and actions.
+    private final int[][] linksFrom;
+    private final int[] linkDest;
+    private final SwitchLinkage.LinkAction[] linkOnEngage;
+    private final SwitchLinkage.LinkAction[] linkOnDisengage;
+    private final boolean[] routingRelevant;    // stop and key-action controls: changing one changes routing
+    // Cascade work space, sized at load: each switch changes at most MAX_CHANGES_PER_CASCADE times per action.
+    private static final int MAX_CHANGES_PER_CASCADE = 2;
+    private final int[] queueSwitch;
+    private final boolean[] queueState;
+    private final int[] changesInCascade;
+    private final int[] touched;
+    private int queueTail;
+    private int touchedCount;
+    private boolean routingChanged;
+    private long cascadeOverflows;
     private final Keyboard[] keyboardOfChannel = new Keyboard[CHANNELS];
     private final boolean[] channelHeard = new boolean[CHANNELS];
     private final List<Keyboard> priority;
@@ -101,9 +119,45 @@ public final class Console {
                 groupOfSwitch.set(s.index(), group);
             }
         }
+        int switchCount = engaged.length;
+        List<SwitchLinkage> links = organ.switchLinkages();
+        linkDest = new int[links.size()];
+        linkOnEngage = new SwitchLinkage.LinkAction[links.size()];
+        linkOnDisengage = new SwitchLinkage.LinkAction[links.size()];
+        int[] outCount = new int[switchCount];
+        for (int i = 0; i < links.size(); i++) {
+            SwitchLinkage l = links.get(i);
+            linkDest[i] = l.dest().index();
+            linkOnEngage[i] = l.onEngage();
+            linkOnDisengage[i] = l.onDisengage();
+            outCount[l.source().index()]++;
+        }
+        linksFrom = new int[switchCount][];
+        for (int s = 0; s < switchCount; s++) {
+            linksFrom[s] = new int[outCount[s]];
+            outCount[s] = 0;
+        }
+        for (int i = 0; i < links.size(); i++) {
+            int src = links.get(i).source().index();
+            linksFrom[src][outCount[src]++] = i;
+        }
+        routingRelevant = new boolean[switchCount];
+        for (Stop s : organ.stops()) {
+            routingRelevant[s.control().index()] = true;
+        }
+        for (KeyAction a : organ.keyActions()) {
+            if (a.control() != null) {
+                routingRelevant[a.control().index()] = true;
+            }
+        }
+        queueSwitch = new int[switchCount * MAX_CHANGES_PER_CASCADE];
+        queueState = new boolean[queueSwitch.length];
+        changesInCascade = new int[switchCount];
+        touched = new int[switchCount];
+
         for (Switch s : organ.switches()) {
             if (s.defaultEngaged()) {
-                engage(s, true);
+                cascade(s, true);
             }
         }
 
@@ -238,9 +292,14 @@ public final class Console {
         return engaged[s.index()];
     }
 
+    /**
+     * Sets a switch as if the player moved it: switches linked to it follow (see {@link #cascade}),
+     * and the key routing is rebuilt once afterwards if any stop or coupler control changed.
+     */
     public synchronized void setEngaged(Switch s, boolean on) {
-        engage(s, on);
-        rebuild();
+        if (cascade(s, on)) {
+            rebuild();
+        }
     }
 
     public synchronized void toggle(Switch s) {
@@ -258,14 +317,69 @@ public final class Console {
         return n;
     }
 
-    private void engage(Switch s, boolean on) {
-        List<Switch> group = groupOfSwitch.get(s.index());
-        if (on && group != null) {
-            for (Switch other : group) {
-                engaged[other.index()] = false;
+    /** Times a cascade was cut short because a switch kept changing (a malformed linkage loop). */
+    public synchronized long cascadeOverflows() {
+        return cascadeOverflows;
+    }
+
+    /**
+     * Sets {@code s} and follows switch linkages breadth-first. A switch changes, and passes the change
+     * on, only if its state actually changes, so links that point back (console tab <-> logical
+     * switch) stop after one step. A switch may change at most {@link #MAX_CHANGES_PER_CASCADE} times
+     * per cascade; a definition that would oscillate is cut off there. Returns whether a stop or
+     * key-action control changed, i.e. whether the routing table must be rebuilt.
+     */
+    private boolean cascade(Switch s, boolean on) {
+        queueTail = 0;
+        touchedCount = 0;
+        routingChanged = false;
+        change(s.index(), on);
+        for (int head = 0; head < queueTail; head++) {
+            int[] out = linksFrom[queueSwitch[head]];
+            boolean engagedNow = queueState[head];
+            for (int link : out) {
+                SwitchLinkage.LinkAction action = engagedNow ? linkOnEngage[link] : linkOnDisengage[link];
+                if (action == SwitchLinkage.LinkAction.ENGAGE) {
+                    change(linkDest[link], true);
+                } else if (action == SwitchLinkage.LinkAction.DISENGAGE) {
+                    change(linkDest[link], false);
+                }
             }
         }
-        engaged[s.index()] = on;
+        for (int i = 0; i < touchedCount; i++) {
+            changesInCascade[touched[i]] = 0;
+        }
+        return routingChanged;
+    }
+
+    /** Changes one switch (releasing the rest of its exclusive group first) and queues the change. */
+    private void change(int index, boolean on) {
+        if (engaged[index] == on) {
+            return;
+        }
+        List<Switch> group = groupOfSwitch.get(index);
+        if (on && group != null) {
+            for (Switch other : group) {
+                if (other.index() != index) {
+                    change(other.index(), false);
+                }
+            }
+        }
+        if (changesInCascade[index] == MAX_CHANGES_PER_CASCADE) {
+            if (cascadeOverflows++ == 0) {
+                System.err.println("Switch linkages keep changing '" + organ.switches().get(index).name()
+                        + "'; the cascade was cut short (reported once)");
+            }
+            return;
+        }
+        if (changesInCascade[index]++ == 0) {
+            touched[touchedCount++] = index;
+        }
+        engaged[index] = on;
+        routingChanged |= routingRelevant[index];
+        queueSwitch[queueTail] = index;
+        queueState[queueTail] = on;
+        queueTail++;
     }
 
     private boolean isActive(KeyAction a) {

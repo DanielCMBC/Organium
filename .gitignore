@@ -26,3 +26,23 @@ regression/stage-1/console-stop-changes.f32
 
 # Screenshots of organ consoles show the sample set's licensed artwork
 research/live/**/*.png
+
+# Sample-set material (licensed audio, organ definitions, artwork, packages) never belongs in this
+# repository; sample sets live outside it, in D:\OrganiumSampleSets.
+*.CompPkg_Hauptwerk_rar
+*.rar
+*.7z
+*.zip
+*.Organ_Hauptwerk_xml
+*.Organ_Hauptwerk_hbx
+*.CustomOrgan_Hauptwerk_xml
+*.InstallationPackageDefinition_Hauptwerk_xml
+*.hbw
+*.wav
+*.bmp
+OrganDefinitions/
+OrganInstallationPackages/
+# Exception: Organium's own synthetic test fixtures and artwork (authored here, freely licensed) may use
+# these formats; keep them under test/fixtures/ or src/organium/resources/.
+!test/fixtures/**
+!src/organium/resources/**

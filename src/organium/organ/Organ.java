@@ -18,6 +18,7 @@ public record Organ(
         List<Rank> ranks,
         List<Pipe> pipes,
         List<List<Switch>> exclusiveGroups,
+        List<SwitchLinkage> switchLinkages,
         Map<Integer, SampleFile> sampleFiles,
         Display display,
         List<String> warnings) {
@@ -33,6 +34,16 @@ public record Organ(
 
     /** Anything on/off: stop knobs, coupler tabs, blower, indicator lights. */
     public record Switch(int index, int id, String name, boolean defaultEngaged) {
+    }
+
+    /**
+     * When {@code source} changes state, acts on {@code dest}: {@code onEngage} when the source engages,
+     * {@code onDisengage} when it disengages. Theatre-organ consoles built with Hauptwerk's Custom Organ
+     * Design Module reach every stop this way: console tab -> logical switch -> the stop's control
+     * switch, with a link back from the logical switch to the tab (research/switch-linkage-report.md).
+     */
+    public record SwitchLinkage(Switch source, Switch dest, LinkAction onEngage, LinkAction onDisengage) {
+        public enum LinkAction { ENGAGE, DISENGAGE, NONE }
     }
 
     /** How one stop draws pipes from one rank: keys [firstKey, firstKey + keyCount) play rank note key + noteOffset. */

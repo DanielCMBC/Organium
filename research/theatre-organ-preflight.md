@@ -165,7 +165,7 @@ was changed.
 
 | # | Gap | Evidence | Status |
 |---|-----|----------|--------|
-| 1 | **SwitchLinkage**: all 193 stop switches (`StopNode_*`) are hidden and non-clickable. Console tabs drive them through 714 linkages (fields `a`, `b` only). Without this, **no stop can be engaged**. | Names suggest `a` = source and `b` = target (tab 2030 "Toys Auto Horn" → 10116 "StopNode_2030"). 442 switches are both source and target, and 12↔10068 link both ways. | Strong hypothesis; field meaning and loop behaviour need schema or probe evidence |
+| 1 | **SwitchLinkage**: all 193 stop switches (`StopNode_*`) are hidden and non-clickable. Console tabs drive them through 714 linkages (fields `a`, `b` only). Without this, **no stop can be engaged**. | Names suggest `a` = source and `b` = target (tab 2030 "Toys Auto Horn" → 10116 "StopNode_2030"). 442 switches are both source and target, and 12↔10068 link both ways. | **Done 2026-11-17** (research/switch-linkage-report.md) |
 | 2 | Alternate ranks (StopRank `m`/`p`/`n`): tremulants and Reit | Now seen in two organs | Field names unconfirmed |
 | 3 | StopRank `g` action type: 1 = key-played, 2 = stop-engaging effect, 3 = stop-disengaging effect, 4 = dummy/Reit. Noise rows have key count 0, so they are harmless today. **Toys** (f = 21, g = 1, one key) would wrongly play from Pedal key 36. | Row names: `StopEffectEngaging_2001` / `StopEffectDisengaging_2001` | Strong hypothesis (`g`), `f` unresolved |
 | 4 | Enclosures + expression shoes | 2 boxes, 1,663 pipes | Not implemented (same gap as Melcer) |
