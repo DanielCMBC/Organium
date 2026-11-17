@@ -54,6 +54,7 @@ public final class App {
     private String asioDriver;
     private boolean demo;
     private boolean asioPanel;
+    private String outputDevice;     // Windows output device (name or part of it); null = default
     private String organFile;
     private PanLaw panLaw = MeasuredPanTable.hauptwerk();
     private double trimDb = DEFAULT_TRIM_DB;
@@ -65,6 +66,11 @@ public final class App {
             if (arg.equals("--list-asio")) {
                 AsioOutput.drivers().forEach(System.out::println);
                 return;
+            } else if (arg.equals("--list-outputs")) {
+                JavaSoundOutput.outputs(SAMPLE_RATE).forEach(System.out::println);
+                return;
+            } else if (arg.startsWith("--output=")) {
+                app.outputDevice = arg.substring("--output=".length());
             } else if (arg.equals("--asio")) {
                 app.useAsio = true;
             } else if (arg.startsWith("--asio=")) {
@@ -269,8 +275,9 @@ public final class App {
             }
             return asio;
         }
-        JavaSoundOutput output = new JavaSoundOutput();
+        JavaSoundOutput output = new JavaSoundOutput(outputDevice);
         output.start(SAMPLE_RATE, PERIOD_FRAMES, engine::render);
+        System.out.println("Windows sound output: " + output.deviceName());
         return output;
     }
 

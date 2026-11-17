@@ -80,6 +80,8 @@ Please use it rather than starting `java` yourself.
 | Command | What it does |
 |---|---|
 | `.\run.ps1 --organ="<file>"` | Play the organ through Windows' normal sound output (recommended to start with). |
+| `.\run.ps1 --organ="<file>" --output="Fones de ouvido"` | Play through a specific Windows output device, e.g. headphones instead of speakers (any part of its name). |
+| `.\run.ps1 --list-outputs` | List the Windows output devices Organium can use. |
 | `.\run.ps1 --organ="<file>" --asio` | Play through the first ASIO driver (lower latency; see [Audio](#6-audio-windows-sound-or-asio)). |
 | `.\run.ps1 --organ="<file>" --asio="<driver name>"` | Use a specific ASIO driver. |
 | `.\run.ps1 --list-asio` | List the installed ASIO drivers. |
